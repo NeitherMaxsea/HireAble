@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Applicant - Job List</title>
+
+<style>
+body{
+  font-family: Arial;
+  background:#eef2f5;
+  padding:20px;
+}
+
+.job{
+  background:#fff;
+  padding:15px;
+  margin-bottom:15px;
+  border-radius:8px;
+}
+
+button{
+  background:#2f80ed;
+  color:#fff;
+  border:none;
+  padding:8px 15px;
+  border-radius:5px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Available Jobs</h2>
+<div id="jobList"></div>
+
+<script>
+let jobs = JSON.parse(localStorage.getItem("jobs")) || [];
+
+let jobList = document.getElementById("jobList");
+
+jobs.forEach(job=>{
+  let div = document.createElement("div");
+  div.className="job";
+  div.innerHTML=`
+    <h3>${job.title}</h3>
+    <p>${job.desc}</p>
+    <small>Location: ${job.loc}</small><br><br>
+    <button>Apply</button>
+  `;
+  jobList.appendChild(div);
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1262 @@
+<template>
+  <div class="app">
+
+    <div class="main-wrapper">
+      <main class="page-scroll">
+        <section class="content">
+
+          <!-- HEADER -->
+          <div class="page-header">
+            <div>
+              <h2>Job Listings</h2>
+              <p class="subtitle">Browse and manage your posted jobs.</p>
+            </div>
+            <button class="backfill-btn" :disabled="backfilling" @click="backfillLegacyJobAccounts">
+              {{ backfilling ? "Fixing..." : "Fix Legacy Accounts" }}
+            </button>
+          </div>
+
+          <!-- SEARCH -->
+          <input
+            type="text"
+            class="search"
+            placeholder="Search job title..."
+            v-model="search"
+          >
+
+          <!-- JOB CARDS -->
+          <div v-if="filteredJobs.length === 0" class="empty">
+            No job posts yet.
+          </div>
+
+          <div v-else class="job-grid">
+            <div
+              class="job-card"
+              v-for="job in filteredJobs"
+              :key="job.id"
+              @click="openView(job)"
+            >
+              <!-- TOP ROW -->
+              <div class="job-top">
+                <div class="location-map">
+                  <iframe
+                    v-if="job.location"
+                    :src="getMapUrl(job.location)"
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                  ></iframe>
+                  <div v-else class="map-empty">No location</div>
+                  <span class="location-label">
+                    {{ job.location || "Not specified" }}
+                  </span>
+                </div>
+
+                <span
+                  class="badge"
+                  :class="job.status === 'open' ? 'open' : 'closed'"
+                >
+                  {{ job.status }}
+                </span>
+              </div>
+
+              <!-- BODY -->
+              <div class="job-body">
+                <h3>{{ job.title }}</h3>
+                <p>{{ job.description }}</p>
+
+                <div class="job-meta">
+                  <span>Type: {{ job.type || "Open" }}</span>
+                  <span>Salary: {{ job.salary || "Negotiable" }}</span>
+                </div>
+
+                <div class="actions">
+                  <button class="view" type="button" @click.stop.prevent="openView(job)">
+                    View
+                  </button>
+
+                  <button
+                    v-if="job.status === 'open'"
+                    class="close"
+                    type="button"
+                    :disabled="busyJobId === job.id"
+                    @click.stop.prevent="closeJob(job)"
+                  >
+                    Close
+                  </button>
+
+                  <button
+                    v-else
+                    class="reopen"
+                    type="button"
+                    :disabled="busyJobId === job.id"
+                    @click.stop.prevent="reopenJob(job)"
+                  >
+                    Reopen
+                  </button>
+
+                  <button
+                    class="delete"
+                    type="button"
+                    :disabled="busyJobId === job.id"
+                    @click.stop.prevent="deleteJob(job)"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </section>
+      </main>
+    </div>
+
+    <!-- EDIT MODAL -->
+    <div v-if="showModal" class="modal-overlay">
+      <div class="modal edit-modal">
+
+        <div class="edit-header">
+          <div>
+            <h3>Edit Job</h3>
+            <p class="subtitle">Update details and photos</p>
+          </div>
+          <button class="close-x" @click="showModal=false">Ã—</button>
+        </div>
+
+        <div class="edit-grid">
+          <div class="field">
+            <label>Job Title</label>
+            <input v-model="editJobData.title" placeholder="Job Title">
+          </div>
+
+          <div class="field">
+            <label>Location</label>
+            <input v-model="editJobData.location" placeholder="Location">
+          </div>
+
+          <div class="field">
+            <label>Employment Type</label>
+            <select v-model="editJobData.type">
+              <option disabled value="">Select type</option>
+              <option>Full-time</option>
+              <option>Part-time</option>
+              <option>Contract</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Salary</label>
+            <input v-model="editJobData.salary" placeholder="Salary">
+          </div>
+
+          <div class="field full">
+            <label>Description</label>
+            <textarea v-model="editJobData.description" placeholder="Description"></textarea>
+          </div>
+        </div>
+
+        <div class="edit-uploads">
+          <div class="edit-upload">
+            <label>Photo 1</label>
+            <input type="file" accept="image/*" @change="handleEditImage($event, 1)">
+            <img v-if="editImagePreview1" :src="editImagePreview1" class="edit-preview" alt="Preview 1">
+            <button
+              v-if="editImagePreview1"
+              class="remove-photo"
+              type="button"
+              @click="clearEditImage(1)"
+            >
+              Remove
+            </button>
+          </div>
+
+          <div class="edit-upload">
+            <label>Photo 2</label>
+            <input type="file" accept="image/*" @change="handleEditImage($event, 2)">
+            <img v-if="editImagePreview2" :src="editImagePreview2" class="edit-preview" alt="Preview 2">
+            <button
+              v-if="editImagePreview2"
+              class="remove-photo"
+              type="button"
+              @click="clearEditImage(2)"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="save" @click="updateJob">Save</button>
+          <button class="cancel" @click="showModal=false">Cancel</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- VIEW MODAL -->
+    <transition name="modal-fade">
+      <div v-if="showViewModal" class="modal-overlay">
+        <div class="modal view-modal">
+        <div class="view-header">
+          <div>
+            <h3>{{ viewJobData.title || "Job Details" }}</h3>
+            <p class="subtitle">Review full job information</p>
+          </div>
+          <button class="close-x" @click="showViewModal=false">Ã—</button>
+        </div>
+
+        <div class="view-body">
+          <div class="detail-grid">
+            <div>
+              <h4>Location</h4>
+              <p>{{ viewJobData.location || "Not specified" }}</p>
+            </div>
+            <div>
+              <h4>Type</h4>
+              <p>{{ viewJobData.type || "Open" }}</p>
+            </div>
+            <div>
+              <h4>Salary</h4>
+              <p>{{ viewJobData.salary || "Negotiable" }}</p>
+            </div>
+            <div>
+              <h4>Status</h4>
+              <p class="status-pill" :class="viewJobData.status === 'open' ? 'open' : 'closed'">
+                {{ viewJobData.status || "open" }}
+              </p>
+            </div>
+          </div>
+
+          <div class="detail-block">
+            <h4>Description</h4>
+            <p>{{ viewJobData.description || "No description provided." }}</p>
+          </div>
+
+          <div class="detail-block">
+            <h4>Map</h4>
+            <iframe
+              v-if="viewJobData.location"
+              :src="getMapUrl(viewJobData.location)"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
+            <p v-else class="map-empty">No location provided</p>
+          </div>
+
+          <div class="detail-block">
+            <h4>Photos</h4>
+            <div class="photo-grid">
+              <img
+                v-if="viewJobData.imageUrl"
+                :src="viewJobData.imageUrl"
+                alt="Job Photo 1"
+              />
+              <div v-else class="photo-placeholder">No photo</div>
+
+              <img
+                v-if="viewJobData.imageUrl2"
+                :src="viewJobData.imageUrl2"
+                alt="Job Photo 2"
+              />
+              <div v-else class="photo-placeholder">No photo</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="save" @click="openEditFromView">Edit</button>
+          <button class="cancel" @click="showViewModal=false">Close</button>
+        </div>
+      </div>
+    </div>
+    </transition>
+
+  </div>
+</template>
+
+<script>
+import { auth, db } from "@/lib/client-platform"
+import api from "@/services/api"
+import { toast } from "vue3-toastify"
+import { onAuthStateChanged } from "@/lib/session-auth"
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  doc,
+  updateDoc,
+  deleteDoc,
+  getDoc,
+  writeBatch,
+  serverTimestamp
+} from "@/lib/laravel-data"
+
+export default {
+  name: "JobListings",
+
+  data() {
+    return {
+      jobs: [],
+      jobsUnsubscribe: null,
+      scopeReady: false,
+      search: "",
+      backfilling: false,
+      busyJobId: null,
+      showModal: false,
+      editJobData: {},
+      showViewModal: false,
+      viewJobData: {},
+      editImageFile1: null,
+      editImageFile2: null,
+      editImagePreview1: "",
+      editImagePreview2: ""
+    }
+  },
+
+  computed: {
+    filteredJobs() {
+      return this.jobs.filter(job =>
+        String(job?.title || "").toLowerCase().includes(this.search.toLowerCase())
+      )
+    }
+  },
+
+  async mounted() {
+    await this.startJobsSync()
+  },
+
+  beforeUnmount() {
+    if (typeof this.jobsUnsubscribe === "function") {
+      this.jobsUnsubscribe()
+      this.jobsUnsubscribe = null
+    }
+  },
+
+  methods: {
+    waitForAuthUser(timeoutMs = 4000) {
+      return new Promise((resolve) => {
+        if (auth.currentUser) {
+          resolve(auth.currentUser)
+          return
+        }
+
+        let settled = false
+        const timer = setTimeout(() => {
+          if (settled) return
+          settled = true
+          unsubscribe()
+          resolve(auth.currentUser || null)
+        }, timeoutMs)
+
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          unsubscribe()
+          resolve(user || null)
+        })
+      })
+    },
+
+    async startJobsSync() {
+      const actor = await this.resolveActorMeta()
+      if (!actor?.uid) {
+        toast.error("Cannot load jobs. Please login again.")
+        return
+      }
+
+      if (typeof this.jobsUnsubscribe === "function") {
+        this.jobsUnsubscribe()
+        this.jobsUnsubscribe = null
+      }
+
+      let jobsRef = collection(db, "jobs")
+      if (actor.companyId) {
+        jobsRef = query(jobsRef, where("companyId", "==", actor.companyId))
+      } else {
+        jobsRef = query(jobsRef, where("postedByUid", "==", actor.uid))
+      }
+
+      this.jobsUnsubscribe = onSnapshot(jobsRef, (snapshot) => {
+        this.jobs = snapshot.docs.map((d) => {
+          const raw = d.data()
+          const images = Array.isArray(raw.images) ? raw.images.filter(Boolean) : []
+
+          return {
+            id: d.id,
+            ...raw,
+            imageUrl:
+              raw.imageUrl ||
+              raw.imageURL ||
+              raw.photo1 ||
+              images[0] ||
+              "",
+            imageUrl2:
+              raw.imageUrl2 ||
+              raw.imageURL2 ||
+              raw.photo2 ||
+              images[1] ||
+              ""
+          }
+        }).sort((a, b) => this.getCreatedAtMillis(b.createdAt) - this.getCreatedAtMillis(a.createdAt))
+
+        if (this.showViewModal && this.viewJobData?.id) {
+          const fresh = this.jobs.find((job) => job.id === this.viewJobData.id)
+          this.viewJobData = fresh ? { ...fresh } : {}
+        }
+
+        if (this.showModal && this.editJobData?.id) {
+          const fresh = this.jobs.find((job) => job.id === this.editJobData.id)
+          if (fresh) {
+            this.editJobData = { ...fresh }
+          }
+        }
+
+        this.scopeReady = true
+      })
+    },
+
+    getCreatedAtMillis(ts) {
+      if (!ts) return 0
+      if (typeof ts?.toMillis === "function") return ts.toMillis()
+      if (typeof ts?.seconds === "number") return ts.seconds * 1000
+      if (ts instanceof Date) return ts.getTime()
+      return 0
+    },
+
+    async resolveActorMeta() {
+      const user = await this.waitForAuthUser()
+      if (!user?.uid) return null
+
+      let profile = {}
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid))
+        if (snap.exists()) {
+          profile = snap.data() || {}
+        }
+      } catch {
+        // fallback to auth/localStorage
+      }
+
+      const email = String(
+        profile.email || user.email || localStorage.getItem("userEmail") || ""
+      ).trim()
+      const name = String(
+        profile.username ||
+        profile.name ||
+        localStorage.getItem("userName") ||
+        email
+      ).trim()
+      const role = String(profile.role || localStorage.getItem("userRole") || "").trim()
+      const companyId = String(profile.companyId || localStorage.getItem("companyId") || "").trim()
+      const companyName = String(profile.companyName || localStorage.getItem("companyName") || "").trim()
+
+      if (!email) return null
+      return {
+        uid: user.uid,
+        email,
+        name,
+        role,
+        companyId,
+        companyName
+      }
+    },
+
+    hasPostedBy(job) {
+      return !!(
+        String(job.postedByEmail || "").trim() ||
+        String(job.postedByName || "").trim() ||
+        String(job.postedByUid || "").trim()
+      )
+    },
+
+    async backfillLegacyJobAccounts() {
+      const legacyJobs = this.jobs.filter((job) => !this.hasPostedBy(job))
+      if (!legacyJobs.length) {
+        toast.info("No legacy jobs found. All accounts are already set.")
+        return
+      }
+
+      const actor = await this.resolveActorMeta()
+      if (!actor) {
+        toast.error("Cannot identify your account. Please login again.")
+        return
+      }
+
+      this.backfilling = true
+      try {
+        const batch = writeBatch(db)
+        legacyJobs.forEach((job) => {
+          batch.update(doc(db, "jobs", job.id), {
+            postedByName: actor.name,
+            postedByEmail: actor.email,
+            postedByRole: actor.role,
+            postedByUid: actor.uid,
+            companyId: actor.companyId || "",
+            companyName: actor.companyName || "",
+            legacyAccountBackfilledAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          })
+        })
+        await batch.commit()
+        toast.success(`Updated ${legacyJobs.length} legacy job account(s).`)
+      } catch (err) {
+        console.error(err)
+        toast.error("Failed to update legacy job accounts.")
+      } finally {
+        this.backfilling = false
+      }
+    },
+
+    openEdit(job) {
+      this.editJobData = { ...job }
+      this.editImageFile1 = null
+      this.editImageFile2 = null
+      this.editImagePreview1 = job.imageUrl || ""
+      this.editImagePreview2 = job.imageUrl2 || ""
+      this.showModal = true
+    },
+
+    openView(job) {
+      if (!job?.id) {
+        toast.error("Unable to open job details.")
+        return
+      }
+      this.viewJobData = { ...job }
+      this.showViewModal = true
+    },
+
+    openEditFromView() {
+      this.showViewModal = false
+      this.openEdit(this.viewJobData)
+    },
+
+    handleEditImage(e, slot) {
+      const file = e.target.files?.[0]
+      if (!file) return
+      if (slot === 1) {
+        this.editImageFile1 = file
+        this.editImagePreview1 = URL.createObjectURL(file)
+      } else {
+        this.editImageFile2 = file
+        this.editImagePreview2 = URL.createObjectURL(file)
+      }
+    },
+
+    clearEditImage(slot) {
+      if (slot === 1) {
+        this.editImageFile1 = null
+        this.editImagePreview1 = ""
+        this.editJobData.imageUrl = ""
+      } else {
+        this.editImageFile2 = null
+        this.editImagePreview2 = ""
+        this.editJobData.imageUrl2 = ""
+      }
+    },
+
+    async uploadImage(file) {
+      const form = new FormData()
+      form.append("image", file)
+      const res = await api.post("/uploads", form)
+      return res.data?.url || ""
+    },
+
+    getMapUrl(location) {
+      if (!location) return ""
+      return `https://www.google.com/maps?q=${encodeURIComponent(location)}&output=embed`
+    },
+
+    async updateJob() {
+      try {
+        const uploadWarnings = []
+
+        if (this.editImageFile1) {
+          try {
+            const url = await this.uploadImage(this.editImageFile1)
+            if (url) {
+              this.editJobData.imageUrl = url
+            } else {
+              uploadWarnings.push("Photo 1 upload returned empty URL. Keeping old photo.")
+            }
+          } catch (uploadErr) {
+            console.error("Photo 1 upload failed:", uploadErr)
+            uploadWarnings.push("Photo 1 upload failed. Keeping old photo.")
+          }
+        }
+        if (this.editImageFile2) {
+          try {
+            const url = await this.uploadImage(this.editImageFile2)
+            if (url) {
+              this.editJobData.imageUrl2 = url
+            } else {
+              uploadWarnings.push("Photo 2 upload returned empty URL. Keeping old photo.")
+            }
+          } catch (uploadErr) {
+            console.error("Photo 2 upload failed:", uploadErr)
+            uploadWarnings.push("Photo 2 upload failed. Keeping old photo.")
+          }
+        }
+
+        await updateDoc(doc(db, "jobs", this.editJobData.id), {
+          title: this.editJobData.title,
+          description: this.editJobData.description,
+          location: this.editJobData.location,
+          salary: this.editJobData.salary,
+          type: this.editJobData.type || "",
+          imageUrl: this.editJobData.imageUrl || "",
+          imageUrl2: this.editJobData.imageUrl2 || "",
+          images: [this.editJobData.imageUrl, this.editJobData.imageUrl2].filter(Boolean)
+        })
+
+        this.showModal = false
+        this.editImageFile1 = null
+        this.editImageFile2 = null
+
+        if (uploadWarnings.length) {
+          toast.warning(uploadWarnings.join(" "))
+        } else {
+          toast.success("Job updated successfully")
+        }
+      } catch (err) {
+        console.error(err)
+        const message =
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to update job"
+        toast.error(message)
+      }
+    },
+
+    async closeJob(job) {
+      const id = job?.id
+      if (!id) {
+        toast.error("Invalid job record.")
+        return
+      }
+
+      this.busyJobId = id
+      try {
+        await updateDoc(doc(db, "jobs", id), {
+          status: "closed",
+          updatedAt: serverTimestamp()
+        })
+        toast.success("Job closed.")
+      } catch (err) {
+        console.error(err)
+        toast.error(err?.message || "Failed to close job.")
+      } finally {
+        this.busyJobId = null
+      }
+    },
+
+    async reopenJob(job) {
+      const id = job?.id
+      if (!id) {
+        toast.error("Invalid job record.")
+        return
+      }
+
+      this.busyJobId = id
+      try {
+        await updateDoc(doc(db, "jobs", id), {
+          status: "open",
+          updatedAt: serverTimestamp()
+        })
+        toast.success("Job reopened.")
+      } catch (err) {
+        console.error(err)
+        toast.error(err?.message || "Failed to reopen job.")
+      } finally {
+        this.busyJobId = null
+      }
+    },
+
+    async deleteJob(job) {
+      const id = job?.id
+      if (!id) {
+        toast.error("Invalid job record.")
+        return
+      }
+
+      if (!window.confirm("Delete this job?")) return
+
+      this.busyJobId = id
+      try {
+        await deleteDoc(doc(db, "jobs", id))
+        toast.success("Job deleted.")
+      } catch (err) {
+        console.error(err)
+        toast.error(err?.message || "Failed to delete job.")
+      } finally {
+        this.busyJobId = null
+      }
+    }
+
+  }
+}
+</script>
+
+<style scoped>
+
+/* ROOT */
+.app{
+  display:flex;
+  background:radial-gradient(1200px 400px at 10% -10%, #e0f2fe 0%, rgba(224,242,254,0) 60%),
+             radial-gradient(900px 500px at 110% 10%, #fef3c7 0%, rgba(254,243,199,0) 55%),
+             #f7f8fc;
+  height:100%;
+}
+
+/* WRAPPER */
+.main-wrapper{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+/* SCROLL */
+.page-scroll{
+  flex:1;
+  overflow-y:auto;
+}
+
+/* CONTENT */
+.content{
+  padding:30px;
+  max-width:1200px;
+  width:100%;
+  margin:0 auto;
+}
+
+/* HEADER */
+.page-header{
+  margin-bottom:18px;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.page-header h2{
+  font-size:26px;
+  letter-spacing:-0.2px;
+}
+
+.subtitle{
+  font-size:14px;
+  color:#64748b;
+}
+
+.backfill-btn{
+  border:none;
+  border-radius:10px;
+  background:#2563eb;
+  color:#ffffff;
+  padding:10px 14px;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  white-space:nowrap;
+}
+
+.backfill-btn:disabled{
+  opacity:.7;
+  cursor:not-allowed;
+}
+
+/* SEARCH */
+.search{
+  width:100%;
+  max-width:420px;
+  padding:12px 14px;
+  border-radius:12px;
+  border:1px solid #e2e8f0;
+  background:#ffffff;
+  margin-bottom:22px;
+  box-shadow:0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+/* GRID */
+.job-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  gap:22px;
+}
+
+/* CARD */
+.job-card{
+  background:white;
+  border-radius:18px;
+  padding:16px;
+  border:1px solid #e5e7eb;
+  box-shadow:0 12px 24px rgba(15, 23, 42, 0.08);
+  transition:transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+  position:relative;
+  overflow:hidden;
+  cursor:pointer;
+}
+
+.job-card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 18px 36px rgba(15, 23, 42, 0.12);
+  border-color:#c7d2fe;
+}
+
+/* TOP ROW */
+.job-top{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  margin:-16px -16px 10px;
+  padding:12px 14px;
+  border-bottom:1px solid #e5e7eb;
+  border-radius:18px 18px 12px 12px;
+  position:relative;
+  box-shadow:0 6px 16px rgba(15, 23, 42, 0.08);
+  background:linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+/* LOCATION */
+.location{
+  position:relative;
+  z-index:1;
+  background:rgba(255,255,255,0.85);
+  color:#1f2937;
+  padding:6px 10px;
+  border-radius:10px;
+  font-size:12px;
+  font-weight:600;
+  border:1px solid rgba(148,163,184,0.35);
+  backdrop-filter: blur(6px);
+}
+
+.location-map{
+  position:relative;
+  width:100%;
+  max-width:520px;
+  height:180px;
+  border-radius:12px;
+  overflow:hidden;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+  margin:0 auto;
+}
+
+.location-map iframe{
+  width:100%;
+  height:100%;
+  border:0;
+  pointer-events:none;
+}
+
+.location-label{
+  position:absolute;
+  left:8px;
+  bottom:6px;
+  background:rgba(255,255,255,0.92);
+  color:#111827;
+  font-size:11px;
+  font-weight:600;
+  padding:3px 6px;
+  border-radius:8px;
+  border:1px solid rgba(148,163,184,0.4);
+  max-width:90%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.map-empty{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#94a3b8;
+  font-size:12px;
+}
+
+/* BADGE */
+.badge{
+  padding:5px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:600;
+  text-transform:capitalize;
+}
+
+.job-top .badge{
+  position:absolute;
+  top:12px;
+  right:14px;
+}
+
+.open{
+  background:#dcfce7;
+  color:#166534;
+}
+
+.closed{
+  background:#fee2e2;
+  color:#991b1b;
+}
+
+/* BODY */
+.job-body h3{
+  margin:8px 0 6px;
+  font-size:18px;
+  color:#111827;
+}
+
+.job-body p{
+  font-size:14px;
+  color:#475569;
+}
+
+/* META */
+.job-meta{
+  display:flex;
+  gap:14px;
+  font-size:13px;
+  margin:12px 0 14px;
+  color:#475569;
+}
+
+/* ACTIONS */
+.actions{
+  display:flex;
+  gap:8px;
+  margin-top:6px;
+  flex-wrap:wrap;
+}
+
+.actions button{
+  padding:8px 12px;
+  border:none;
+  border-radius:12px;
+  font-size:12px;
+  cursor:pointer;
+  color:white;
+  letter-spacing:0.2px;
+  font-weight:600;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  box-shadow:0 6px 14px rgba(15, 23, 42, 0.15);
+  transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+
+.actions button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 10px 20px rgba(15, 23, 42, 0.2);
+  filter:brightness(1.03);
+}
+
+.actions button:active{
+  transform:translateY(0);
+  box-shadow:0 6px 12px rgba(15, 23, 42, 0.18);
+}
+
+.actions button:disabled{
+  opacity:.65;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:none;
+}
+
+.view{ background:linear-gradient(135deg, #0ea5e9, #0284c7); }
+.close{ background:linear-gradient(135deg, #ef4444, #b91c1c); }
+.reopen{ background:linear-gradient(135deg, #f59e0b, #d97706); }
+.delete{ background:linear-gradient(135deg, #7f1d1d, #4c0519); }
+
+.empty{
+  background:#ffffff;
+  border:1px dashed #cbd5f5;
+  padding:20px;
+  border-radius:14px;
+  color:#64748b;
+  font-style:italic;
+}
+
+/* MODAL */
+.modal-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.5);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active{
+  transition:opacity .22s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to{
+  opacity:0;
+}
+
+.modal-fade-enter-active .modal{
+  transition:transform .22s ease, opacity .22s ease;
+}
+
+.modal-fade-enter-from .modal{
+  transform:translateY(6px);
+  opacity:0;
+}
+
+.modal{
+  background:white;
+  padding:22px;
+  border-radius:14px;
+  width:340px;
+  box-shadow:0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.edit-modal{
+  width:min(860px, 94vw);
+}
+
+.view-modal{
+  width:min(820px, 92vw);
+}
+
+.edit-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.edit-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+
+.field label{
+  display:block;
+  font-size:12px;
+  color:#64748b;
+  margin-bottom:6px;
+  text-transform:uppercase;
+  letter-spacing:0.6px;
+}
+
+.field.full{
+  grid-column:1 / -1;
+}
+
+.edit-grid input,
+.edit-grid textarea,
+.edit-grid select{
+  margin:0;
+}
+
+.edit-grid textarea{
+  min-height:90px;
+  resize:vertical;
+}
+
+.view-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+
+.close-x{
+  border:none;
+  background:#f1f5f9;
+  color:#334155;
+  width:32px;
+  height:32px;
+  border-radius:999px;
+  cursor:pointer;
+  font-size:18px;
+  line-height:1;
+}
+
+.view-body{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+.detail-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  gap:12px;
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  padding:12px;
+  border-radius:12px;
+}
+
+.detail-grid h4,
+.detail-block h4{
+  margin:0 0 6px;
+  font-size:12px;
+  color:#64748b;
+  text-transform:uppercase;
+  letter-spacing:0.6px;
+}
+
+.detail-grid p,
+.detail-block p{
+  margin:0;
+  color:#111827;
+  font-size:14px;
+}
+
+.detail-block{
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  padding:12px;
+}
+
+.detail-block iframe{
+  width:100%;
+  height:320px;
+  border:0;
+  border-radius:12px;
+}
+
+.map-empty{
+  color:#94a3b8;
+  font-size:13px;
+  margin:0;
+}
+
+.status-pill{
+  display:inline-flex;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  text-transform:capitalize;
+}
+
+.photo-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.photo-grid img{
+  width:100%;
+  height:160px;
+  object-fit:cover;
+  border-radius:12px;
+  border:1px solid #e5e7eb;
+}
+
+.photo-placeholder{
+  height:160px;
+  border-radius:12px;
+  border:1px dashed #e5e7eb;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#94a3b8;
+  background:#f8fafc;
+  font-size:12px;
+}
+
+.modal input,
+.modal textarea{
+  width:100%;
+  margin-bottom:12px;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #cbd5f5;
+}
+
+.modal select{
+  width:100%;
+  margin-bottom:12px;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #cbd5f5;
+  background:#ffffff;
+}
+
+.modal-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+}
+
+.save{
+  background:#2563eb;
+  color:white;
+  padding:9px 16px;
+}
+
+.cancel{
+  background:#64748b;
+  color:white;
+  padding:9px 16px;
+}
+
+.edit-uploads{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:6px;
+}
+
+.edit-upload{
+  border:1px dashed #cbd5f5;
+  border-radius:12px;
+  padding:10px;
+  background:#f8fafc;
+}
+
+.edit-upload label{
+  display:block;
+  font-size:12px;
+  color:#475569;
+  margin-bottom:6px;
+}
+
+.edit-preview{
+  width:100%;
+  height:120px;
+  object-fit:cover;
+  border-radius:10px;
+  border:1px solid #e5e7eb;
+  margin-top:8px;
+}
+
+.remove-photo{
+  margin-top:6px;
+  border:none;
+  background:#e2e8f0;
+  color:#334155;
+  font-size:12px;
+  padding:6px 10px;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+@media (max-width: 700px){
+  .edit-grid{
+    grid-template-columns:1fr;
+  }
+  .edit-uploads{
+    grid-template-columns:1fr;
+  }
+}
+
+</style>
+
+
+
