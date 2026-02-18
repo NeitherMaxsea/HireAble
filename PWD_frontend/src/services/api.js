@@ -36,6 +36,13 @@ function normalizeApiBaseUrl(value) {
   const raw = String(value || "").trim()
   if (!raw) return inferDefaultApiBaseUrl().replace(/\/+$/, "")
 
+  if (raw.startsWith("/")) {
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return `${window.location.origin.replace(/\/+$/, "")}${raw}`.replace(/\/+$/, "")
+    }
+    return `http://127.0.0.1:8000${raw}`.replace(/\/+$/, "")
+  }
+
   let base = raw.replace(/\/+$/, "")
   try {
     const parsed = new URL(base)
