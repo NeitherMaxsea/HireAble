@@ -1,4 +1,55 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api").replace(/\/+$/, "")
+function isPrivateIpv4(hostname) {
+  const match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!match) return false
+
+  const parts = match.slice(1).map((value) => Number(value))
+  if (parts.some((value) => Number.isNaN(value) || value < 0 || value > 255)) return false
+
+  const [a, b] = parts
+  if (a === 10) return true
+  if (a === 127) return true
+  if (a === 192 && b === 168) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  return false
+}
+
+function inferDefaultApiBaseUrl() {
+  if (typeof window === "undefined" || !window.location) return "http://127.0.0.1:8000/api"
+
+  const { hostname } = window.location
+  const isLocal =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname.endsWith(".local") ||
+    isPrivateIpv4(hostname)
+
+  if (isLocal) {
+    const resolvedHost = hostname === "0.0.0.0" ? "127.0.0.1" : hostname
+    return `http://${resolvedHost}:8000/api`
+  }
+
+  return `${window.location.origin.replace(/\/+$/, "")}/api`
+}
+
+function normalizeApiBaseUrl(value) {
+  const raw = String(value || "").trim()
+  if (!raw) return inferDefaultApiBaseUrl().replace(/\/+$/, "")
+
+  let base = raw.replace(/\/+$/, "")
+  try {
+    const parsed = new URL(base)
+    if (parsed.pathname === "" || parsed.pathname === "/") {
+      base = `${base}/api`
+    }
+  } catch {
+    // Ignore non-absolute URLs.
+  }
+
+  return base.replace(/\/+$/, "")
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
 function buildUrl(path, params) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
@@ -68,11 +119,20 @@ async function request(method, path, data, options = {}) {
     onUploadProgress({ loaded: 1, total: 1 })
   }
 
-  const response = await fetch(url, {
-    method,
-    headers: finalHeaders,
-    body,
-  })
+  let response
+  try {
+    response = await fetch(url, {
+      method,
+      headers: finalHeaders,
+      body,
+    })
+  } catch (cause) {
+    const error = new Error(
+      `Network error while requesting ${url}. Check that the API server is running and VITE_API_BASE_URL is correct.`,
+    )
+    error.cause = cause
+    throw error
+  }
 
   const text = await response.text()
   const json = parseJsonLoose(text)
