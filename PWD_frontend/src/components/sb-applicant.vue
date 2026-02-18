@@ -36,6 +36,11 @@
         <span v-if="!isCollapsed">Interviews</span>
       </router-link>
 
+      <router-link to="/applicant/training-progress" class="menu-item" @click="closeMobile">
+        <i class="bi bi-graph-up-arrow icon"></i>
+        <span v-if="!isCollapsed">Training Progress</span>
+      </router-link>
+
       <router-link to="/applicant/notifications" class="menu-item" @click="closeMobile">
         <i class="bi bi-bell icon"></i>
         <span v-if="!isCollapsed">Notifications</span>

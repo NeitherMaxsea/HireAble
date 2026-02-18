@@ -1,468 +1,570 @@
 <template>
   <div class="app">
-
-    <!-- SIDEBAR -->
     <SidebarOpEmployer />
 
     <div class="main-wrapper">
-
-      <!-- NAVBAR -->
       <NavbarEmployer />
 
-      <!-- CONTENT -->
       <main class="content">
-
-        <!-- ================= HEADER ================= -->
         <div class="page-header">
-
-          <div class="header-left">
-            <h2>Training Management</h2>
+          <div>
+            <h2>Training Programs</h2>
             <p class="subtitle">
-              Manage training programs and employee enrollment.
+              Add and manage training programs, assign trainers and duration, and enroll individuals.
             </p>
           </div>
-
           <div class="header-actions">
-            <button class="secondary-btn" @click="showEnroll=true">
-              Enroll Employee
-            </button>
-
-            <button class="primary-btn" @click="showAddTraining=true">
-              + Add Training Program
-            </button>
+            <button class="btn ghost" @click="openEnrollModal">Enroll Individual</button>
+            <button class="btn primary" @click="openProgramModal">+ Add Program</button>
           </div>
-
         </div>
 
-        <!-- ================= TRAINING PROGRAMS ================= -->
-        <div class="section-card">
-
-          <div class="section-header">
-            <h3>Training Programs</h3>
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Program Catalog</h3>
+            <input v-model="searchTerm" type="text" placeholder="Search program or trainer..." />
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Training Title</th>
-                <th>Type</th>
-                <th>Duration</th>
-                <th>Trainer</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Program</th>
+                  <th>Category</th>
+                  <th>Trainer</th>
+                  <th>Duration</th>
+                  <th>Participants</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="program in filteredPrograms" :key="program.id">
+                  <td>{{ program.title }}</td>
+                  <td>{{ program.category }}</td>
+                  <td>{{ program.trainer }}</td>
+                  <td>{{ program.duration }}</td>
+                  <td>{{ program.enrolled }}</td>
+                  <td>
+                    <span class="badge" :class="statusClass(program.status)">
+                      {{ program.status }}
+                    </span>
+                  </td>
+                  <td class="actions">
+                    <button class="btn-link" @click="editProgram(program)">Edit</button>
+                    <button class="btn-link danger" @click="toggleProgramStatus(program)">
+                      {{ program.status === "Active" ? "Deactivate" : "Activate" }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-            <tbody>
-              <tr v-for="t in trainings" :key="t.id">
-                <td>{{ t.title }}</td>
-                <td>{{ t.type }}</td>
-                <td>{{ t.duration }}</td>
-                <td>{{ t.trainer }}</td>
-
-                <td>
-                  <span :class="['status', t.status.toLowerCase()]">
-                    {{ t.status }}
-                  </span>
-                </td>
-
-                <td class="actions">
-                  <button class="upload">
-                    Upload Materials
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-        </div>
-
-        <!-- ================= ENROLLED EMPLOYEES ================= -->
-        <div class="section-card">
-
-          <div class="section-header">
-            <h3>Enrolled Employees</h3>
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Enrollment List</h3>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Employee Name</th>
-                <th>Training</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Completion %</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr v-for="e in enrollments" :key="e.id">
-                <td>{{ e.employee }}</td>
-                <td>{{ e.training }}</td>
-                <td>{{ e.start }}</td>
-                <td>{{ e.end }}</td>
-                <td>{{ e.progress }}%</td>
-
-                <td>
-                  <span :class="['status', e.status.toLowerCase()]">
-                    {{ e.status }}
-                  </span>
-                </td>
-
-                <td class="actions">
-                  <button class="complete" @click="markCompleted(e)">
-                    Mark Completed
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-        </div>
-
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Individual</th>
+                  <th>Program</th>
+                  <th>Start Date</th>
+                  <th>Target End</th>
+                  <th>Progress</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in enrollmentList" :key="item.id">
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.program }}</td>
+                  <td>{{ item.startDate }}</td>
+                  <td>{{ item.endDate }}</td>
+                  <td>{{ item.progress }}%</td>
+                  <td>
+                    <span class="badge" :class="statusClass(item.status)">
+                      {{ item.status }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
 
-    <!-- ================= ADD TRAINING MODAL ================= -->
-    <div v-if="showAddTraining" class="modal-overlay">
-
+    <div v-if="showProgramModal" class="modal-overlay">
       <div class="modal">
-
-        <h3>Add Training Program</h3>
-
-        <div class="form-group">
-          <label>Training Title</label>
-          <input type="text" v-model="trainingForm.title">
+        <h3>{{ editingProgramId ? "Edit Program" : "Add Program" }}</h3>
+        <div class="form-grid">
+          <label>
+            Program Name
+            <input v-model="programForm.title" type="text" />
+          </label>
+          <label>
+            Category
+            <select v-model="programForm.category">
+              <option value="Technical">Technical</option>
+              <option value="Safety">Safety</option>
+              <option value="Work Readiness">Work Readiness</option>
+              <option value="Operations">Operations</option>
+            </select>
+          </label>
+          <label>
+            Trainer
+            <input v-model="programForm.trainer" type="text" />
+          </label>
+          <label>
+            Duration
+            <input v-model="programForm.duration" type="text" placeholder="e.g. 4 weeks" />
+          </label>
         </div>
-
-        <div class="form-group">
-          <label>Type</label>
-          <select v-model="trainingForm.type">
-            <option>Onboarding</option>
-            <option>Technical</option>
-            <option>Soft Skills</option>
-            <option>Accessibility</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Duration</label>
-          <input type="text" v-model="trainingForm.duration">
-        </div>
-
-        <div class="form-group">
-          <label>Trainer</label>
-          <input type="text" v-model="trainingForm.trainer">
-        </div>
-
         <div class="modal-actions">
-          <button class="cancel" @click="showAddTraining=false">
-            Cancel
-          </button>
-          <button class="save">
-            Save
-          </button>
+          <button class="btn ghost" @click="closeProgramModal">Cancel</button>
+          <button class="btn primary" @click="saveProgram">Save</button>
         </div>
-
       </div>
-
     </div>
 
-    <!-- ================= ENROLL MODAL ================= -->
-    <div v-if="showEnroll" class="modal-overlay">
-
+    <div v-if="showEnrollModal" class="modal-overlay">
       <div class="modal">
-
-        <h3>Enroll Employee</h3>
-
-        <div class="form-group">
-          <label>Employee Name</label>
-          <input type="text" v-model="enrollForm.employee">
+        <h3>Enroll Individual</h3>
+        <div class="form-grid">
+          <label>
+            Name
+            <input v-model="enrollForm.name" type="text" />
+          </label>
+          <label>
+            Program
+            <select v-model="enrollForm.program">
+              <option v-for="program in programs" :key="program.id" :value="program.title">
+                {{ program.title }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Start Date
+            <input v-model="enrollForm.startDate" type="date" />
+          </label>
+          <label>
+            Target End Date
+            <input v-model="enrollForm.endDate" type="date" />
+          </label>
         </div>
-
-        <div class="form-group">
-          <label>Training Program</label>
-          <select v-model="enrollForm.training">
-            <option v-for="t in trainings" :key="t.id">
-              {{ t.title }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Start Date</label>
-          <input type="date" v-model="enrollForm.start">
-        </div>
-
-        <div class="form-group">
-          <label>End Date</label>
-          <input type="date" v-model="enrollForm.end">
-        </div>
-
         <div class="modal-actions">
-          <button class="cancel" @click="showEnroll=false">
-            Cancel
-          </button>
-          <button class="save">
-            Enroll
-          </button>
+          <button class="btn ghost" @click="closeEnrollModal">Cancel</button>
+          <button class="btn primary" @click="saveEnrollment">Enroll</button>
         </div>
-
       </div>
-
     </div>
-
   </div>
 </template>
 
 <script>
-import SidebarOpEmployer from '@/components/sb-employer-operator.vue'
-import NavbarEmployer from '@/components/nv-employer.vue'
+import SidebarOpEmployer from "@/components/sb-employer-operator.vue"
+import NavbarEmployer from "@/components/nv-employer.vue"
 
 export default {
-  name:"TrainingManagement",
-
-  components:{
+  name: "TrainingPrograms",
+  components: {
     SidebarOpEmployer,
     NavbarEmployer
   },
-
-  data(){
-    return{
-      showAddTraining:false,
-      showEnroll:false,
-
-      trainings:[
-        {
-          id:1,
-          title:"PWD Workplace Orientation",
-          type:"Onboarding",
-          duration:"2 Days",
-          trainer:"HR Team",
-          status:"Active"
-        }
-      ],
-
-      enrollments:[
-        {
-          id:1,
-          employee:"Juan Dela Cruz",
-          training:"PWD Workplace Orientation",
-          start:"2026-03-01",
-          end:"2026-03-02",
-          progress:60,
-          status:"Ongoing"
-        }
-      ],
-
-      trainingForm:{
-        title:"",
-        type:"",
-        duration:"",
-        trainer:""
+  data() {
+    return {
+      searchTerm: "",
+      showProgramModal: false,
+      showEnrollModal: false,
+      editingProgramId: null,
+      programForm: {
+        title: "",
+        category: "Technical",
+        trainer: "",
+        duration: ""
       },
-
-      enrollForm:{
-        employee:"",
-        training:"",
-        start:"",
-        end:""
-      }
+      enrollForm: {
+        name: "",
+        program: "",
+        startDate: "",
+        endDate: ""
+      },
+      programs: [
+        {
+          id: 1,
+          title: "Workplace Safety Basics",
+          category: "Safety",
+          trainer: "Angela Ramos",
+          duration: "2 weeks",
+          enrolled: 12,
+          status: "Active"
+        },
+        {
+          id: 2,
+          title: "Customer Service Foundations",
+          category: "Work Readiness",
+          trainer: "Ryan Flores",
+          duration: "3 weeks",
+          enrolled: 9,
+          status: "Active"
+        },
+        {
+          id: 3,
+          title: "Digital Productivity Tools",
+          category: "Technical",
+          trainer: "Carla Santos",
+          duration: "4 weeks",
+          enrolled: 15,
+          status: "Inactive"
+        }
+      ],
+      enrollmentList: [
+        {
+          id: 1,
+          name: "Juan Dela Cruz",
+          program: "Workplace Safety Basics",
+          startDate: "2026-02-16",
+          endDate: "2026-03-02",
+          progress: 65,
+          status: "In Progress"
+        },
+        {
+          id: 2,
+          name: "Maria Santos",
+          program: "Customer Service Foundations",
+          startDate: "2026-02-10",
+          endDate: "2026-03-03",
+          progress: 100,
+          status: "Completed"
+        }
+      ]
     }
   },
+  computed: {
+    filteredPrograms() {
+      const keyword = this.searchTerm.trim().toLowerCase()
+      if (!keyword) return this.programs
+      return this.programs.filter((program) => {
+        return (
+          program.title.toLowerCase().includes(keyword) ||
+          program.trainer.toLowerCase().includes(keyword)
+        )
+      })
+    }
+  },
+  methods: {
+    statusClass(status) {
+      if (status === "Completed" || status === "Active") return "success"
+      if (status === "In Progress") return "info"
+      return "muted"
+    },
+    openProgramModal() {
+      this.editingProgramId = null
+      this.programForm = {
+        title: "",
+        category: "Technical",
+        trainer: "",
+        duration: ""
+      }
+      this.showProgramModal = true
+    },
+    editProgram(program) {
+      this.editingProgramId = program.id
+      this.programForm = {
+        title: program.title,
+        category: program.category,
+        trainer: program.trainer,
+        duration: program.duration
+      }
+      this.showProgramModal = true
+    },
+    closeProgramModal() {
+      this.showProgramModal = false
+    },
+    saveProgram() {
+      if (!this.programForm.title || !this.programForm.trainer || !this.programForm.duration) return
 
-  methods:{
-    markCompleted(e){
-      e.status="Completed"
-      e.progress=100
+      if (this.editingProgramId) {
+        const row = this.programs.find((item) => item.id === this.editingProgramId)
+        if (row) {
+          row.title = this.programForm.title
+          row.category = this.programForm.category
+          row.trainer = this.programForm.trainer
+          row.duration = this.programForm.duration
+        }
+      } else {
+        this.programs.unshift({
+          id: Date.now(),
+          title: this.programForm.title,
+          category: this.programForm.category,
+          trainer: this.programForm.trainer,
+          duration: this.programForm.duration,
+          enrolled: 0,
+          status: "Active"
+        })
+      }
+
+      this.showProgramModal = false
+    },
+    toggleProgramStatus(program) {
+      program.status = program.status === "Active" ? "Inactive" : "Active"
+    },
+    openEnrollModal() {
+      this.enrollForm = {
+        name: "",
+        program: this.programs[0]?.title || "",
+        startDate: "",
+        endDate: ""
+      }
+      this.showEnrollModal = true
+    },
+    closeEnrollModal() {
+      this.showEnrollModal = false
+    },
+    saveEnrollment() {
+      if (!this.enrollForm.name || !this.enrollForm.program || !this.enrollForm.startDate) return
+
+      this.enrollmentList.unshift({
+        id: Date.now(),
+        name: this.enrollForm.name,
+        program: this.enrollForm.program,
+        startDate: this.enrollForm.startDate,
+        endDate: this.enrollForm.endDate || "-",
+        progress: 0,
+        status: "Not Started"
+      })
+
+      const program = this.programs.find((item) => item.title === this.enrollForm.program)
+      if (program) program.enrolled += 1
+
+      this.showEnrollModal = false
     }
   }
 }
 </script>
 
 <style scoped>
-
-/* Layout */
-
-.app{
-  display:flex;
-  background:#f5f7fb;
-  min-height:100vh;
+.app {
+  display: flex;
+  height: 100vh;
+  background: #f5f7fb;
+  overflow: hidden;
 }
 
-.main-wrapper{
-  flex:1;
-  display:flex;
-  flex-direction:column;
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
-.content{
-  padding:32px;
+.content {
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-/* ================= HEADER ================= */
-
-.page-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-end;
-  margin-bottom:32px;
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
 }
 
-.header-left h2{
-  font-size:26px;
-  font-weight:700;
-  margin-bottom:6px;
+.page-header h2 {
+  margin: 0;
+  color: #0f172a;
 }
 
-.subtitle{
-  color:#6b7280;
-  font-size:14px;
+.subtitle {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
 }
 
-.header-actions{
-  display:flex;
-  gap:12px;
+.header-actions {
+  display: flex;
+  gap: 8px;
 }
 
-/* Buttons */
-
-.primary-btn{
-  background:#4f46e5;
-  color:white;
-  border:none;
-  padding:10px 18px;
-  border-radius:10px;
-  font-weight:600;
+.panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
 }
 
-.secondary-btn{
-  background:white;
-  color:#4f46e5;
-  border:1px solid #4f46e5;
-  padding:10px 18px;
-  border-radius:10px;
-  font-weight:600;
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
 }
 
-/* ================= SECTIONS ================= */
-
-.section-card{
-  background:white;
-  border-radius:14px;
-  box-shadow:0 4px 12px rgba(0,0,0,.05);
-  padding:20px;
-  margin-bottom:28px;
+.panel-head h3 {
+  margin: 0;
+  font-size: 16px;
 }
 
-.section-header{
-  margin-bottom:14px;
+.panel-head input {
+  width: 280px;
+  max-width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 10px;
 }
 
-.section-header h3{
-  font-size:18px;
-  font-weight:600;
+.table-wrap {
+  overflow-x: auto;
 }
 
-/* Table */
-
-table{
-  width:100%;
-  border-collapse:collapse;
+table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-th,td{
-  padding:14px;
-  border-bottom:1px solid #eee;
+th,
+td {
+  padding: 11px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  font-size: 13px;
 }
 
-th{
-  background:#f9fafb;
-  text-align:left;
+th {
+  color: #64748b;
+  font-size: 12px;
 }
 
-/* Status */
-
-.status{
-  padding:4px 12px;
-  border-radius:20px;
-  font-size:12px;
-  font-weight:600;
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.active{ background:#bbf7d0;color:#065f46; }
-.ongoing{ background:#bfdbfe;color:#1e3a8a; }
-.completed{ background:#bbf7d0;color:#065f46; }
-
-/* Actions */
-
-.actions button{
-  padding:6px 12px;
-  border:none;
-  border-radius:8px;
-  font-size:12px;
+.badge.success {
+  background: #dcfce7;
+  color: #166534;
 }
 
-.upload{ background:#3b82f6;color:white; }
-.complete{ background:#22c55e;color:white; }
-
-/* ================= MODAL ================= */
-
-.modal-overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.5);
-  display:flex;
-  justify-content:center;
-  align-items:center;
+.badge.info {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
-.modal{
-  background:white;
-  width:420px;
-  padding:26px;
-  border-radius:14px;
+.badge.muted {
+  background: #f1f5f9;
+  color: #475569;
 }
 
-.form-group{
-  margin-bottom:14px;
+.actions {
+  white-space: nowrap;
 }
 
-.form-group label{
-  font-size:13px;
-  margin-bottom:6px;
-  display:block;
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  cursor: pointer;
 }
 
-.form-group input,
-.form-group select{
-  width:100%;
-  padding:10px;
-  border-radius:8px;
-  border:1px solid #ddd;
+.btn.primary {
+  background: #2563eb;
+  color: #ffffff;
 }
 
-.modal-actions{
-  display:flex;
-  justify-content:flex-end;
-  gap:10px;
+.btn.ghost {
+  background: #e2e8f0;
+  color: #1f2937;
 }
 
-.cancel{
-  background:#e5e7eb;
-  padding:10px 16px;
-  border:none;
-  border-radius:8px;
+.btn-link {
+  border: none;
+  background: none;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 6px;
 }
 
-.save{
-  background:#4f46e5;
-  color:white;
-  padding:10px 16px;
-  border:none;
-  border-radius:8px;
+.btn-link.danger {
+  color: #b91c1c;
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.4);
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  z-index: 60;
+}
+
+.modal {
+  background: #ffffff;
+  width: min(560px, 95vw);
+  border-radius: 14px;
+  border: 1px solid #dbe2ea;
+  padding: 16px;
+}
+
+.modal h3 {
+  margin: 0 0 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-grid label {
+  font-size: 12px;
+  color: #334155;
+}
+
+.form-grid input,
+.form-grid select {
+  margin-top: 4px;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

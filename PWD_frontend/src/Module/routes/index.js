@@ -34,6 +34,9 @@ import AssignmentManagement from "@/Module/Employer/views/Operation/AssignmentMa
 import DeploymentScheduling from "@/Module/Employer/views/Operation/DeploymentScheduling.vue"
 import TrainingManagement from "@/Module/Employer/views/Operation/TrainingManagement.vue"
 import TrainingProgress from "@/Module/Employer/views/Operation/TrainingProgress.vue"
+import WrittenTestManagement from "@/Module/Employer/views/Operation/WrittenTestManagement.vue"
+import PhysicalEvaluation from "@/Module/Employer/views/Operation/PhysicalEvaluation.vue"
+import FinalEvaluation from "@/Module/Employer/views/Operation/FinalEvaluation.vue"
 import WorkAssignment from "@/Module/Employer/views/Operation/WorkAssignment.vue"
 import ReportsAnalytics from "@/Module/Employer/views/Operation/ReportsAnalytics.vue"
 import EmployeeOperationsProfile from "@/Module/Employer/views/Operation/EmployeeProfile.vue"
@@ -48,6 +51,7 @@ import CompanyAdminLogs from "@/Module/CompanyAdmin/views/Logs.vue"
 // APPLICANT
 import ApplicantLayout from "@/Module/Applicant/views/layout/ApplicantLayout.vue"
 import ApplicantDashboard from "@/Module/Applicant/views/job_list.vue"
+import ApplicantTrainingProgress from "@/Module/Applicant/views/training_progress.vue"
 
 // Auth helper function
 function isUserAuthenticated() {
@@ -325,17 +329,37 @@ const routes = [
         },
       },
       {
-        path: "training-management",
-        name: "TrainingManagement",
+        path: "training-assessment/training-programs",
+        name: "TrainingPrograms",
         component: TrainingManagement,
         meta: {
-          title: "PWD Job Portal | Training Management",
+          title: "PWD Job Portal | Training Programs",
           requiresAuth: true,
           requiredRole: "employer",
         },
       },
       {
-        path: "training-progress",
+        path: "training-assessment/written-test-management",
+        name: "WrittenTestManagement",
+        component: WrittenTestManagement,
+        meta: {
+          title: "PWD Job Portal | Written Test Management",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "training-assessment/physical-evaluation",
+        name: "PhysicalEvaluation",
+        component: PhysicalEvaluation,
+        meta: {
+          title: "PWD Job Portal | Physical Evaluation",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "training-assessment/training-progress",
         name: "TrainingProgress",
         component: TrainingProgress,
         meta: {
@@ -343,6 +367,24 @@ const routes = [
           requiresAuth: true,
           requiredRole: "employer",
         },
+      },
+      {
+        path: "training-assessment/final-evaluation",
+        name: "FinalEvaluation",
+        component: FinalEvaluation,
+        meta: {
+          title: "PWD Job Portal | Final Evaluation",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "training-management",
+        redirect: "/employer/operation/training-assessment/training-programs",
+      },
+      {
+        path: "training-progress",
+        redirect: "/employer/operation/training-assessment/training-progress",
       },
       {
         path: "work-assignment",
@@ -466,6 +508,16 @@ const routes = [
         component: EmployerProfile,
         meta: {
           title: "PWD Job Portal | Applicant Profile",
+          requiresAuth: true,
+          requiredRole: "applicant",
+        },
+      },
+      {
+        path: "training-progress",
+        name: "ApplicantTrainingProgress",
+        component: ApplicantTrainingProgress,
+        meta: {
+          title: "PWD Job Portal | Applicant Training Progress",
           requiresAuth: true,
           requiredRole: "applicant",
         },

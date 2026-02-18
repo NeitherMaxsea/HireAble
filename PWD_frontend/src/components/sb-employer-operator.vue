@@ -56,33 +56,74 @@
         <span v-if="collapsed && tooltip === 'Deployment Scheduling'" class="tooltip">Deployment Scheduling</span>
       </router-link>
 
-      <router-link
-        to="/employer/operation/training-management"
-        class="nav-link"
-        :class="{ active: route.path.includes('/employer/operation/training-management') }"
-        @mouseenter="tooltip = 'Training Management'"
+      <div
+        class="nav-group"
+        @mouseenter="tooltip = 'Training & Assessment Management'"
         @mouseleave="tooltip = ''"
       >
-        <span class="nav-left">
-          <i class="bi bi-mortarboard"></i>
-          <span v-if="!collapsed">Training Management</span>
-        </span>
-        <span v-if="collapsed && tooltip === 'Training Management'" class="tooltip">Training Management</span>
-      </router-link>
+        <div
+          class="nav-parent"
+          :class="{ active: isTrainingRoute }"
+          @click="handleTrainingModuleClick"
+        >
+          <span class="nav-left">
+            <i class="bi bi-mortarboard"></i>
+            <span v-if="!collapsed">Training & Assessment Management</span>
+          </span>
+          <i
+            v-if="!collapsed"
+            class="bi"
+            :class="showTrainingModule ? 'bi-chevron-down' : 'bi-chevron-right'"
+          ></i>
+        </div>
 
-      <router-link
-        to="/employer/operation/training-progress"
-        class="nav-link"
-        :class="{ active: route.path.includes('/employer/operation/training-progress') }"
-        @mouseenter="tooltip = 'Training Progress'"
-        @mouseleave="tooltip = ''"
-      >
-        <span class="nav-left">
-          <i class="bi bi-graph-up-arrow"></i>
-          <span v-if="!collapsed">Training Progress</span>
+        <span
+          v-if="collapsed && tooltip === 'Training & Assessment Management'"
+          class="tooltip"
+        >
+          Training & Assessment Management
         </span>
-        <span v-if="collapsed && tooltip === 'Training Progress'" class="tooltip">Training Progress</span>
-      </router-link>
+
+        <transition name="slide">
+          <div v-show="showTrainingModule && !collapsed" class="nav-children">
+            <router-link
+              to="/employer/operation/training-assessment/written-test-management"
+              class="nav-child"
+              :class="{ active: route.path.includes('/written-test-management') }"
+            >
+              <i class="bi bi-ui-checks-grid"></i>
+              Written Test Management
+            </router-link>
+
+            <router-link
+              to="/employer/operation/training-assessment/physical-evaluation"
+              class="nav-child"
+              :class="{ active: route.path.includes('/physical-evaluation') }"
+            >
+              <i class="bi bi-activity"></i>
+              Physical Evaluation
+            </router-link>
+
+            <router-link
+              to="/employer/operation/training-assessment/training-progress"
+              class="nav-child"
+              :class="{ active: route.path.includes('/training-progress') }"
+            >
+              <i class="bi bi-graph-up-arrow"></i>
+              Training Progress
+            </router-link>
+
+            <router-link
+              to="/employer/operation/training-assessment/final-evaluation"
+              class="nav-child"
+              :class="{ active: route.path.includes('/final-evaluation') }"
+            >
+              <i class="bi bi-clipboard2-check"></i>
+              Final Evaluation
+            </router-link>
+          </div>
+        </transition>
+      </div>
 
       <router-link
         to="/employer/operation/work-assignment"
@@ -177,6 +218,7 @@ const router = useRouter()
 const collapsed = ref(false)
 const showMenu = ref(false)
 const tooltip = ref("")
+const showTrainingModule = ref(false)
 
 const userName = ref("Loading...")
 const userEmail = ref("Loading...")
@@ -194,6 +236,7 @@ onMounted(() => {
 
   userName.value = storedName || "User"
   userEmail.value = storedEmail || "No email"
+  showTrainingModule.value = route.path.includes("/training-assessment/")
 
   document.addEventListener("click", handleClickOutside)
 })
@@ -204,6 +247,18 @@ onBeforeUnmount(() => {
 
 function toggleSidebar() {
   collapsed.value = !collapsed.value
+  if (collapsed.value) {
+    showTrainingModule.value = false
+  }
+}
+
+function handleTrainingModuleClick() {
+  if (collapsed.value) {
+    collapsed.value = false
+    showTrainingModule.value = true
+    return
+  }
+  showTrainingModule.value = !showTrainingModule.value
 }
 
 function toggleMenu() {
@@ -271,6 +326,8 @@ function goProfile() {
   showMenu.value = false
   router.push("/employer/operation/employee-profile")
 }
+
+const isTrainingRoute = computed(() => route.path.includes("/training-assessment/"))
 </script>
 
 <style scoped>
@@ -278,9 +335,10 @@ function goProfile() {
   width: 270px;
   height: 100vh;
   background: #ffffff;
-  padding: 22px;
+  padding: 14px 14px 12px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   will-change: width, padding;
   transition:
     width 0.45s cubic-bezier(0.22, 1, 0.36, 1),
@@ -342,16 +400,16 @@ function goProfile() {
 
 .sidebar.collapsed {
   width: 80px;
-  padding: 22px 10px;
+  padding: 14px 8px 12px;
 }
 
 .logo {
-  width: 80px;
+  width: 58px;
   transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sidebar.collapsed .logo {
-  width: 42px;
+  width: 36px;
 }
 
 .sidebar * {
@@ -365,26 +423,18 @@ function goProfile() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 30px;
-}
-
-.logo {
-  width: 80px;
-}
-
-.sidebar.collapsed .logo {
-  display: none;
+  margin-bottom: 10px;
 }
 
 .collapse-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   background: none;
   border: none;
   position: relative;
-  left: 10px;
-  font-size: 22px;
+  left: 4px;
+  font-size: 18px;
   cursor: pointer;
   color: inherit;
   display: flex;
@@ -402,12 +452,19 @@ function goProfile() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
+  padding: 8px 10px;
   border-radius: 10px;
   text-decoration: none;
   color: inherit;
   cursor: pointer;
   margin-bottom: 4px;
+}
+
+.nav {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-right: 0;
 }
 
 .active {
@@ -424,6 +481,36 @@ function goProfile() {
   display: flex;
   gap: 10px;
   align-items: center;
+  min-width: 0;
+}
+
+.nav-parent .nav-left span {
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.nav-children {
+  padding-left: 12px;
+  margin-bottom: 4px;
+  display: grid;
+  gap: 4px;
+}
+
+.nav-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.nav-child i {
+  flex-shrink: 0;
 }
 
 .nav-link:hover,

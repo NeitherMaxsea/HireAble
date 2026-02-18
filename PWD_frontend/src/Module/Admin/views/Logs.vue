@@ -2,13 +2,34 @@
   <section class="logs-page">
     <header class="logs-header">
       <h2>System Logs</h2>
-      <p>Realtime activity from users, jobs, and applications.</p>
+      <p>Realtime activity feed.</p>
     </header>
+
+    <div class="filters">
+      <label>
+        <span>From</span>
+        <input v-model="fromDate" type="date" />
+      </label>
+      <label>
+        <span>To</span>
+        <input v-model="toDate" type="date" />
+      </label>
+      <label>
+        <span>Source</span>
+        <select v-model="sourceFilter">
+          <option value="all">All</option>
+          <option value="users">Users</option>
+          <option value="jobs">Jobs</option>
+          <option value="applications">Applications</option>
+        </select>
+      </label>
+      <button type="button" class="clear-btn" @click="clearFilters">Clear</button>
+    </div>
 
     <div class="summary-grid">
       <div class="summary-card">
         <span>Total Events</span>
-        <strong>{{ events.length }}</strong>
+        <strong>{{ filteredEvents.length }}</strong>
       </div>
       <div class="summary-card">
         <span>User Events</span>
@@ -35,9 +56,9 @@
         <p>{{ loadError }}</p>
       </div>
 
-      <div v-else-if="!events.length" class="logs-empty">
+      <div v-else-if="!filteredEvents.length" class="logs-empty">
         <i class="bi bi-journal-text"></i>
-        <p>No log entries found in Laravel.</p>
+        <p>No logs match the current filters.</p>
       </div>
 
       <div v-else class="logs-table-wrap">
@@ -52,7 +73,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="event in events" :key="event.id">
+            <tr v-for="event in visibleEvents" :key="event.id">
               <td class="time">{{ formatDateTime(event.timestampMs) }}</td>
               <td>
                 <span class="badge source" :class="event.sourceClass">{{ event.sourceLabel }}</span>
@@ -65,13 +86,17 @@
             </tr>
           </tbody>
         </table>
+
+        <div v-if="canLoadMore" class="load-more-wrap">
+          <button type="button" class="load-more" @click="visibleCount += PAGE_SIZE">Load more</button>
+        </div>
       </div>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { collection, onSnapshot } from "@/lib/laravel-data"
 import { db } from "@/lib/client-platform"
 
@@ -82,6 +107,11 @@ const userEventsUpper = ref([])
 const jobEvents = ref([])
 const applicationEvents = ref([])
 const unsubscribers = []
+const fromDate = ref("")
+const toDate = ref("")
+const sourceFilter = ref("all")
+const PAGE_SIZE = 50
+const visibleCount = ref(PAGE_SIZE)
 
 const userEvents = computed(() => {
   return [...userEventsLower.value, ...userEventsUpper.value]
@@ -91,12 +121,24 @@ const events = computed(() => {
   return [...userEvents.value, ...jobEvents.value, ...applicationEvents.value]
     .filter((item) => item.timestampMs > 0)
     .sort((a, b) => b.timestampMs - a.timestampMs)
-    .slice(0, 200)
 })
 
-const userEventCount = computed(() => userEvents.value.length)
-const jobEventCount = computed(() => jobEvents.value.length)
-const applicationEventCount = computed(() => applicationEvents.value.length)
+const filteredEvents = computed(() => {
+  const minMs = parseDateStart(fromDate.value)
+  const maxMs = parseDateEnd(toDate.value)
+  return events.value.filter((item) => {
+    const sourceMatch = sourceFilter.value === "all" || item.sourceClass === sourceFilter.value
+    const minMatch = !minMs || item.timestampMs >= minMs
+    const maxMatch = !maxMs || item.timestampMs <= maxMs
+    return sourceMatch && minMatch && maxMatch
+  })
+})
+
+const visibleEvents = computed(() => filteredEvents.value.slice(0, visibleCount.value))
+const canLoadMore = computed(() => visibleEvents.value.length < filteredEvents.value.length)
+const userEventCount = computed(() => filteredEvents.value.filter((event) => event.sourceClass === "users").length)
+const jobEventCount = computed(() => filteredEvents.value.filter((event) => event.sourceClass === "jobs").length)
+const applicationEventCount = computed(() => filteredEvents.value.filter((event) => event.sourceClass === "applications").length)
 
 onMounted(() => {
   subscribeUsers("users")
@@ -107,6 +149,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unsubscribers.forEach((unsub) => unsub && unsub())
+})
+
+watch([fromDate, toDate, sourceFilter], () => {
+  visibleCount.value = PAGE_SIZE
 })
 
 function subscribeUsers(collectionName) {
@@ -292,6 +338,25 @@ function formatDateTime(ms) {
     minute: "2-digit"
   })
 }
+
+function parseDateStart(value) {
+  if (!value) return 0
+  const parsed = new Date(`${value}T00:00:00`)
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+}
+
+function parseDateEnd(value) {
+  if (!value) return 0
+  const parsed = new Date(`${value}T23:59:59.999`)
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime()
+}
+
+function clearFilters() {
+  fromDate.value = ""
+  toDate.value = ""
+  sourceFilter.value = "all"
+  visibleCount.value = PAGE_SIZE
+}
 </script>
 
 <style scoped>
@@ -304,8 +369,46 @@ function formatDateTime(ms) {
 }
 
 .logs-header p {
-  color: #6b7280;
-  margin: 8px 0 20px;
+  color: #0f766e;
+  margin: 8px 0 14px;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  align-items: end;
+}
+
+.filters label {
+  display: grid;
+  gap: 4px;
+}
+
+.filters span {
+  font-size: 12px;
+  color: #0f766e;
+}
+
+.filters input,
+.filters select {
+  border: 1px solid #cce7e3;
+  background: #f6fcfb;
+  color: #1f2937;
+  border-radius: 8px;
+  padding: 7px 10px;
+  min-width: 150px;
+}
+
+.clear-btn {
+  border: 1px solid #94d5cd;
+  border-radius: 8px;
+  background: #ecf9f7;
+  color: #0f766e;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
 }
 
 .summary-grid {
@@ -317,13 +420,13 @@ function formatDateTime(ms) {
 
 .summary-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #d8ece9;
   border-radius: 10px;
   padding: 12px;
 }
 
 .summary-card span {
-  color: #64748b;
+  color: #0f766e;
   font-size: 12px;
 }
 
@@ -331,14 +434,14 @@ function formatDateTime(ms) {
   display: block;
   margin-top: 4px;
   font-size: 20px;
-  color: #0f172a;
+  color: #0f3b39;
 }
 
 .logs-card {
   background: #fff;
   border-radius: 10px;
   padding: 18px;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.05);
+  border: 1px solid #d8ece9;
 }
 
 .logs-empty {
@@ -354,7 +457,7 @@ function formatDateTime(ms) {
 
 .logs-empty i {
   font-size: 2rem;
-  color: #0d6efd;
+  color: #0d9488;
 }
 
 .logs-empty p {
@@ -381,10 +484,10 @@ td {
 
 th {
   font-size: 12px;
-  color: #64748b;
+  color: #0f766e;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  background: #f8fafc;
+  background: #f2fbfa;
 }
 
 .time {
@@ -414,8 +517,8 @@ th {
 }
 
 .badge.source.users {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #ccfbf1;
+  color: #115e59;
 }
 
 .badge.source.jobs {
@@ -424,13 +527,36 @@ th {
 }
 
 .badge.source.applications {
-  background: #fff7ed;
+  background: #ffedd5;
   color: #9a3412;
 }
 
 .badge.event {
   background: #e2e8f0;
   color: #334155;
+}
+
+.load-more-wrap {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.load-more {
+  border: 1px solid #8cd4cc;
+  background: #ecf9f7;
+  color: #0f766e;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .filters input,
+  .filters select {
+    min-width: 130px;
+  }
 }
 </style>
 

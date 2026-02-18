@@ -1,175 +1,192 @@
 <template>
   <div class="app">
-
-    <!-- SIDEBAR -->
     <SidebarOpEmployer />
 
     <div class="main-wrapper">
-
-      <!-- NAVBAR -->
       <NavbarEmployer />
 
-      <!-- CONTENT -->
       <main class="content">
-
-        <!-- ================= HEADER ================= -->
         <div class="page-header">
-
-          <div class="header-left">
-            <h2>Training Progress & Completion Tracking</h2>
+          <div>
+            <h2>Training Progress</h2>
             <p class="subtitle">
-              Monitor completion of trainings per employee.
+              Log daily or weekly progress and track attendance, participation, and skill improvement.
             </p>
           </div>
-
         </div>
 
-        <!-- ================= FILTER BAR ================= -->
-        <div class="toolbar">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Progress Log Entry</h3>
+          </div>
+          <div class="form-grid">
+            <label>
+              Individual
+              <select v-model="progressForm.individual">
+                <option v-for="name in individuals" :key="name" :value="name">{{ name }}</option>
+              </select>
+            </label>
+            <label>
+              Frequency
+              <select v-model="progressForm.frequency">
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
+              </select>
+            </label>
+            <label>
+              Attendance (%)
+              <input v-model.number="progressForm.attendance" type="number" min="0" max="100" />
+            </label>
+            <label>
+              Participation (%)
+              <input v-model.number="progressForm.participation" type="number" min="0" max="100" />
+            </label>
+            <label>
+              Skill Improvement (%)
+              <input v-model.number="progressForm.skill" type="number" min="0" max="100" />
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary" @click="addProgressLog">Save Progress Log</button>
+          </div>
+        </section>
 
-          <input
-            type="text"
-            placeholder="Search employee..."
-            v-model="search"
-          />
-
-          <select v-model="filterStatus">
-            <option value="">All Status</option>
-            <option>Completed</option>
-            <option>In Progress</option>
-            <option>Not Started</option>
-          </select>
-
-        </div>
-
-        <!-- ================= TABLE ================= -->
-        <div class="table-card">
-
-          <table>
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Training Name</th>
-                <th>Progress</th>
-                <th>Completion Date</th>
-                <th>Certificate</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr v-for="t in filteredTrainings" :key="t.id">
-
-                <td>{{ t.employee }}</td>
-                <td>{{ t.department }}</td>
-                <td>{{ t.training }}</td>
-
-                <!-- Progress -->
-                <td>
-                  <div class="progress-wrapper">
-                    <div class="progress-bar">
-                      <div
-                        class="progress-fill"
-                        :style="{width: t.progress + '%'}"
-                      ></div>
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Progress Dashboard</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Individual</th>
+                  <th>Latest Frequency</th>
+                  <th>Attendance</th>
+                  <th>Participation</th>
+                  <th>Skill Improvement</th>
+                  <th>Completion</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in progressRows" :key="row.id">
+                  <td>{{ row.individual }}</td>
+                  <td>{{ row.frequency }}</td>
+                  <td>{{ row.attendance }}%</td>
+                  <td>{{ row.participation }}%</td>
+                  <td>{{ row.skill }}%</td>
+                  <td>
+                    <div class="progress-wrap">
+                      <div class="progress-track">
+                        <div class="progress-fill" :style="{ width: `${row.completion}%` }"></div>
+                      </div>
+                      <span>{{ row.completion }}%</span>
                     </div>
-                    <span class="progress-text">
-                      {{ t.progress }}%
+                  </td>
+                  <td>
+                    <span class="badge" :class="statusClass(row.status)">
+                      {{ row.status }}
                     </span>
-                  </div>
-                </td>
-
-                <td>{{ t.completionDate || '—' }}</td>
-
-                <td>
-                  <button
-                    v-if="t.certificate"
-                    class="cert-btn"
-                  >
-                    View
-                  </button>
-
-                  <span v-else>—</span>
-                </td>
-
-                <td>
-                  <span :class="['status', t.status.toLowerCase().replace(' ','-')]">
-                    {{ t.status }}
-                  </span>
-                </td>
-
-              </tr>
-            </tbody>
-          </table>
-
-        </div>
-
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
-
   </div>
 </template>
 
 <script>
-import SidebarOpEmployer from '@/components/sb-employer-operator.vue'
-import NavbarEmployer from '@/components/nv-employer.vue'
+import SidebarOpEmployer from "@/components/sb-employer-operator.vue"
+import NavbarEmployer from "@/components/nv-employer.vue"
 
 export default {
-  name:"TrainingProgress",
-
-  components:{
+  name: "TrainingProgress",
+  components: {
     SidebarOpEmployer,
     NavbarEmployer
   },
-
-  data(){
-    return{
-      search:"",
-      filterStatus:"",
-
-      trainings:[
+  data() {
+    return {
+      progressForm: {
+        individual: "Juan Dela Cruz",
+        frequency: "Daily",
+        attendance: 88,
+        participation: 84,
+        skill: 79
+      },
+      progressRows: [
         {
-          id:1,
-          employee:"Juan Dela Cruz",
-          department:"HR",
-          training:"PWD Workplace Orientation",
-          progress:100,
-          completionDate:"2026-03-02",
-          certificate:true,
-          status:"Completed"
+          id: 1,
+          individual: "Juan Dela Cruz",
+          frequency: "Daily",
+          attendance: 88,
+          participation: 84,
+          skill: 79,
+          completion: 84,
+          status: "On Track"
         },
         {
-          id:2,
-          employee:"Ana Reyes",
-          department:"IT",
-          training:"Accessibility Tools Training",
-          progress:60,
-          completionDate:"",
-          certificate:false,
-          status:"In Progress"
+          id: 2,
+          individual: "Maria Santos",
+          frequency: "Weekly",
+          attendance: 97,
+          participation: 92,
+          skill: 90,
+          completion: 93,
+          status: "Completed"
         },
         {
-          id:3,
-          employee:"Mark Santos",
-          department:"Finance",
-          training:"Soft Skills Workshop",
-          progress:0,
-          completionDate:"",
-          certificate:false,
-          status:"Not Started"
+          id: 3,
+          individual: "Ralph Rivera",
+          frequency: "Daily",
+          attendance: 62,
+          participation: 58,
+          skill: 55,
+          completion: 58,
+          status: "Needs Attention"
         }
       ]
     }
   },
+  computed: {
+    individuals() {
+      return [...new Set(this.progressRows.map((row) => row.individual))]
+    }
+  },
+  methods: {
+    statusClass(status) {
+      if (status === "Completed") return "success"
+      if (status === "On Track") return "info"
+      return "danger"
+    },
+    computeCompletion(attendance, participation, skill) {
+      const score = Math.round(attendance * 0.34 + participation * 0.33 + skill * 0.33)
+      return Math.min(100, Math.max(0, score))
+    },
+    deriveStatus(completion) {
+      if (completion >= 90) return "Completed"
+      if (completion >= 70) return "On Track"
+      return "Needs Attention"
+    },
+    addProgressLog() {
+      const completion = this.computeCompletion(
+        Number(this.progressForm.attendance),
+        Number(this.progressForm.participation),
+        Number(this.progressForm.skill)
+      )
 
-  computed:{
-    filteredTrainings(){
-      return this.trainings.filter(t=>{
-        return (
-          t.employee.toLowerCase().includes(this.search.toLowerCase()) &&
-          (this.filterStatus==="" || t.status===this.filterStatus)
-        )
+      this.progressRows.unshift({
+        id: Date.now(),
+        individual: this.progressForm.individual,
+        frequency: this.progressForm.frequency,
+        attendance: Number(this.progressForm.attendance),
+        participation: Number(this.progressForm.participation),
+        skill: Number(this.progressForm.skill),
+        completion,
+        status: this.deriveStatus(completion)
       })
     }
   }
@@ -177,131 +194,160 @@ export default {
 </script>
 
 <style scoped>
-
-/* Layout */
-
-.app{
-  display:flex;
-  background:#f5f7fb;
-  min-height:100vh;
+.app {
+  display: flex;
+  height: 100vh;
+  background: #f5f7fb;
+  overflow: hidden;
 }
 
-.main-wrapper{
-  flex:1;
-  display:flex;
-  flex-direction:column;
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
-.content{
-  padding:32px;
+.content {
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-/* ================= HEADER ================= */
-
-.page-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-end;
-  margin-bottom:28px;
+.page-header h2 {
+  margin: 0;
 }
 
-.header-left h2{
-  font-size:26px;
-  font-weight:700;
-  margin-bottom:6px;
+.subtitle {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
 }
 
-.subtitle{
-  color:#6b7280;
-  font-size:14px;
+.panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
 }
 
-/* ================= TOOLBAR ================= */
-
-.toolbar{
-  display:flex;
-  gap:12px;
-  margin-bottom:24px;
+.panel-head h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
 }
 
-.toolbar input,
-.toolbar select{
-  padding:10px;
-  border-radius:8px;
-  border:1px solid #ddd;
-  min-width:220px;
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-/* ================= TABLE ================= */
-
-.table-card{
-  background:white;
-  border-radius:14px;
-  box-shadow:0 4px 12px rgba(0,0,0,.05);
-  overflow:auto;
+.form-grid label {
+  font-size: 12px;
+  color: #334155;
 }
 
-table{
-  width:100%;
-  border-collapse:collapse;
+.form-grid input,
+.form-grid select {
+  margin-top: 4px;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 10px;
 }
 
-th,td{
-  padding:14px;
-  text-align:left;
-  border-bottom:1px solid #eee;
+.form-actions {
+  margin-top: 12px;
 }
 
-th{
-  background:#f9fafb;
-  font-weight:600;
+.table-wrap {
+  overflow-x: auto;
 }
 
-/* ================= PROGRESS BAR ================= */
-
-.progress-wrapper{
-  display:flex;
-  align-items:center;
-  gap:10px;
+table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.progress-bar{
-  width:120px;
-  height:8px;
-  background:#e5e7eb;
-  border-radius:10px;
-  overflow:hidden;
+th,
+td {
+  padding: 11px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  font-size: 13px;
 }
 
-.progress-fill{
-  height:100%;
-  background:#4f46e5;
-  border-radius:10px;
+th {
+  color: #64748b;
+  font-size: 12px;
 }
 
-/* ================= CERT BUTTON ================= */
-
-.cert-btn{
-  background:#22c55e;
-  color:white;
-  border:none;
-  padding:6px 12px;
-  border-radius:8px;
-  font-size:12px;
-  cursor:pointer;
+.progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* ================= STATUS ================= */
-
-.status{
-  padding:5px 12px;
-  border-radius:20px;
-  font-size:12px;
-  font-weight:600;
+.progress-track {
+  width: 120px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
 }
 
-.completed{ background:#bbf7d0;color:#065f46; }
-.in-progress{ background:#bfdbfe;color:#1e3a8a; }
-.not-started{ background:#e5e7eb;color:#374151; }
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+}
 
+.badge {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.info {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+@media (max-width: 1000px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

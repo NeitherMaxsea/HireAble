@@ -34,6 +34,7 @@ export default {
       const path = this.$route.path
 
       if (path.includes("/job-management/")) return "Job Management"
+      if (path.includes("/training-assessment/")) return "Training & Assessment"
       if (path.includes("/dashboard")) return "Dashboard"
       if (path.includes("/applicant")) return "Applicants"
       if (path.includes("/employee")) return "Employees"
@@ -47,6 +48,11 @@ export default {
 
       if (path.includes("/job-management/job-list")) return "Job Listings"
       if (path.includes("/job-management/job-post")) return "Job Post"
+      if (path.includes("/training-programs")) return "Training Programs"
+      if (path.includes("/written-test-management")) return "Written Test Management"
+      if (path.includes("/physical-evaluation")) return "Physical Evaluation"
+      if (path.includes("/training-progress")) return "Training Progress"
+      if (path.includes("/final-evaluation")) return "Final Evaluation"
 
       return ""
     }

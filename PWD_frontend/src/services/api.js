@@ -133,11 +133,17 @@ async function request(method, path, data, options = {}) {
       headers: finalHeaders,
       body,
     })
+<<<<<<< HEAD
   } catch (cause) {
     const error = new Error(
       `Network error while requesting ${url}. Check that the API server is running and VITE_API_BASE_URL is correct.`,
     )
     error.cause = cause
+    error.response = {
+      status: 0,
+      data: null,
+    }
+    error.isNetworkError = true
     throw error
   }
 
@@ -178,3 +184,4 @@ const api = {
 }
 
 export default api
+
