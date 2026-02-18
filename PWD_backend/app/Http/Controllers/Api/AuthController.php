@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use App\Models\User;
 use App\Services\PhpMailerService;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,7 @@ class AuthController extends Controller
     {
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email', 'unique:admins,email'],
             'password' => ['required', 'string', 'min:8'],
             'role' => ['nullable', 'string', 'max:50'],
             'contact' => ['nullable', 'string', 'max:100'],
@@ -38,6 +39,11 @@ class AuthController extends Controller
         $normalizedRole = strtolower(trim((string) ($payload['role'] ?? 'applicant')));
         if ($normalizedRole === 'employer') {
             $normalizedRole = 'company_admin';
+        }
+        if ($normalizedRole === 'admin') {
+            return response()->json([
+                'message' => 'Admin accounts are managed separately.',
+            ], 403);
         }
 
         $isCompanyAdmin = $normalizedRole === 'company_admin';
@@ -88,13 +94,57 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $payload = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
             'verificationCode' => ['nullable', 'digits:6'],
             'sessionKey' => ['nullable', 'string', 'max:191'],
         ]);
 
-        $user = User::where('email', $payload['email'])->first();
+        $loginValue = strtolower(trim((string) ($payload['email'] ?? '')));
+        if ($loginValue === '') {
+            return response()->json(['message' => 'Login is required'], 422);
+        }
+
+        $admin = $this->findAdminByLogin($loginValue);
+        if ($admin) {
+            if (!Hash::check($payload['password'], (string) $admin->password)) {
+                return response()->json(['message' => 'Invalid credentials'], 401);
+            }
+
+            $status = strtolower((string) ($admin->status ?? ''));
+            if ($status === 'suspended') {
+                return response()->json([
+                    'message' => 'Your account has been suspended. Please contact support.',
+                ], 403);
+            }
+
+            $sessionKey = trim((string) ($payload['sessionKey'] ?? ''));
+            if ($sessionKey === '') {
+                $sessionKey = (string) Str::uuid();
+            }
+
+            if ($this->isSessionInUseByAnotherDevice($admin, $sessionKey)) {
+                return response()->json([
+                    'message' => 'This account is currently in use on another device. Please try again later.',
+                    'code' => 'ACCOUNT_IN_USE',
+                ], 409);
+            }
+
+            $admin->last_login_at = now();
+            $admin->status = 'active';
+            $admin->is_active = true;
+            $admin->active_session_key = $sessionKey;
+            $admin->session_last_seen_at = now();
+            $admin->save();
+
+            return response()->json([
+                'message' => 'Login successful',
+                'user' => $this->mapUser($admin),
+                'sessionKey' => $sessionKey,
+            ]);
+        }
+
+        $user = $this->findUserByLogin($loginValue);
         if (!$user || !Hash::check($payload['password'], (string) $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
@@ -151,14 +201,20 @@ class AuthController extends Controller
         $payload = $request->validate([
             'uid' => ['required', 'string'],
             'sessionKey' => ['required', 'string', 'max:191'],
+            'accountType' => ['nullable', 'string', 'in:users,admins'],
         ]);
 
-        $user = User::find($payload['uid']);
-        if (!$user) {
+        $account = $this->resolveAccountForSession(
+            (string) $payload['uid'],
+            $payload['accountType'] ?? null,
+            (string) $payload['sessionKey']
+        );
+
+        if (!$account) {
             return response()->json(['message' => 'Account not found.'], 404);
         }
 
-        $currentSessionKey = trim((string) ($user->active_session_key ?? ''));
+        $currentSessionKey = trim((string) ($account->active_session_key ?? ''));
         if ($currentSessionKey === '' || !hash_equals($currentSessionKey, (string) $payload['sessionKey'])) {
             return response()->json([
                 'message' => 'This account is now in use on another device.',
@@ -166,12 +222,12 @@ class AuthController extends Controller
             ], 409);
         }
 
-        $user->session_last_seen_at = now();
-        if (strtolower((string) ($user->status ?? '')) !== 'suspended') {
-            $user->status = 'active';
-            $user->is_active = true;
+        $account->session_last_seen_at = now();
+        if (strtolower((string) ($account->status ?? '')) !== 'suspended') {
+            $account->status = 'active';
+            $account->is_active = true;
         }
-        $user->save();
+        $account->save();
 
         return response()->json(['message' => 'Session active.']);
     }
@@ -181,23 +237,29 @@ class AuthController extends Controller
         $payload = $request->validate([
             'uid' => ['required', 'string'],
             'sessionKey' => ['required', 'string', 'max:191'],
+            'accountType' => ['nullable', 'string', 'in:users,admins'],
         ]);
 
-        $user = User::find($payload['uid']);
-        if (!$user) {
+        $account = $this->resolveAccountForSession(
+            (string) $payload['uid'],
+            $payload['accountType'] ?? null,
+            (string) $payload['sessionKey']
+        );
+
+        if (!$account) {
             return response()->json(['message' => 'Logged out']);
         }
 
-        $currentSessionKey = trim((string) ($user->active_session_key ?? ''));
+        $currentSessionKey = trim((string) ($account->active_session_key ?? ''));
         if ($currentSessionKey !== '' && hash_equals($currentSessionKey, (string) $payload['sessionKey'])) {
-            $user->active_session_key = null;
-            $user->session_last_seen_at = null;
-            $user->is_active = false;
-            if (strtolower((string) ($user->status ?? '')) !== 'suspended') {
-                $user->status = 'inactive';
+            $account->active_session_key = null;
+            $account->session_last_seen_at = null;
+            $account->is_active = false;
+            if (strtolower((string) ($account->status ?? '')) !== 'suspended') {
+                $account->status = 'inactive';
             }
-            $user->last_logout_at = now();
-            $user->save();
+            $account->last_logout_at = now();
+            $account->save();
         }
 
         return response()->json(['message' => 'Logged out']);
@@ -210,8 +272,12 @@ class AuthController extends Controller
         ]);
 
         $email = strtolower(trim($payload['email']));
-        $user = User::where('email', $email)->first();
-        $role = strtolower((string) ($user->role ?? ''));
+        $admin = Admin::where('email', $email)->first();
+        $role = strtolower((string) ($admin->role ?? ''));
+        if (!$role) {
+            $user = User::where('email', $email)->first();
+            $role = strtolower((string) ($user->role ?? ''));
+        }
         if (!$role) {
             $pending = DB::table('pending_registrations')->where('email', $email)->first();
             $role = strtolower((string) ($pending->role ?? ''));
@@ -266,9 +332,18 @@ class AuthController extends Controller
                 return response()->json(['valid' => false, 'message' => 'Registration session expired. Please register again.'], 422);
             }
 
+            $pendingRole = strtolower((string) ($pending->role ?? 'applicant'));
+            if ($pendingRole === 'admin') {
+                DB::table('pending_registrations')->where('id', $pending->id)->delete();
+                return response()->json([
+                    'valid' => false,
+                    'message' => 'Admin accounts are managed separately.',
+                ], 403);
+            }
+
             $existing = User::where('email', $email)->first();
             if (!$existing) {
-                $isCompanyAdmin = strtolower((string) ($pending->role ?? '')) === 'company_admin';
+                $isCompanyAdmin = $pendingRole === 'company_admin';
                 $companyLoginCode = $isCompanyAdmin ? (string) random_int(100000, 999999) : null;
 
                 $created = User::create([
@@ -276,7 +351,7 @@ class AuthController extends Controller
                     'username' => (string) $pending->name,
                     'email' => $email,
                     'password' => (string) $pending->password,
-                    'role' => (string) ($pending->role ?? 'applicant'),
+                    'role' => $pendingRole ?: 'applicant',
                     'status' => 'active',
                     'is_active' => true,
                     'contact' => $pending->contact,
@@ -351,6 +426,14 @@ class AuthController extends Controller
             }
         }
 
+        $admin = Admin::where('email', $email)->first();
+        if ($admin) {
+            $admin->password = $payload['password'];
+            $admin->save();
+
+            return response()->json(['message' => 'Password reset successful']);
+        }
+
         $user = User::where('email', $email)->first();
         if (!$user) {
             return response()->json(['message' => 'Account not found'], 404);
@@ -362,8 +445,10 @@ class AuthController extends Controller
         return response()->json(['message' => 'Password reset successful']);
     }
 
-    private function mapUser(User $user): array
+    private function mapUser(User|Admin $user): array
     {
+        $isAdmin = $user instanceof Admin;
+
         return [
             'id' => (string) $user->id,
             'name' => $user->name,
@@ -372,18 +457,19 @@ class AuthController extends Controller
             'role' => $user->role ?? 'applicant',
             'status' => $user->status ?? 'active',
             'isActive' => (bool) ($user->is_active ?? true),
-            'companyId' => $user->company_id,
-            'companyName' => $user->company_name,
-            'companyAddress' => $user->company_address,
-            'companyIndustry' => $user->company_industry,
-            'position' => $user->position,
-            'department' => $user->department,
+            'companyId' => $isAdmin ? null : $user->company_id,
+            'companyName' => $isAdmin ? null : $user->company_name,
+            'companyAddress' => $isAdmin ? null : $user->company_address,
+            'companyIndustry' => $isAdmin ? null : $user->company_industry,
+            'position' => $isAdmin ? null : $user->position,
+            'department' => $isAdmin ? null : $user->department,
             'hasActiveSession' => !empty($user->active_session_key),
             'sessionLastSeenAt' => $user->session_last_seen_at,
+            'accountType' => $isAdmin ? 'admins' : 'users',
         ];
     }
 
-    private function isSessionInUseByAnotherDevice(User $user, string $sessionKey): bool
+    private function isSessionInUseByAnotherDevice(User|Admin $user, string $sessionKey): bool
     {
         $activeSessionKey = trim((string) ($user->active_session_key ?? ''));
         if ($activeSessionKey === '') {
@@ -408,6 +494,55 @@ class AuthController extends Controller
         }
 
         return $lastSeen->greaterThan(now()->subMinutes(3));
+    }
+
+    private function findUserByLogin(string $loginValue): ?User
+    {
+        return User::query()
+            ->whereRaw('LOWER(email) = ?', [$loginValue])
+            ->orWhereRaw('LOWER(username) = ?', [$loginValue])
+            ->first();
+    }
+
+    private function findAdminByLogin(string $loginValue): ?Admin
+    {
+        return Admin::query()
+            ->whereRaw('LOWER(email) = ?', [$loginValue])
+            ->orWhereRaw('LOWER(username) = ?', [$loginValue])
+            ->first();
+    }
+
+    private function resolveAccountForSession(string $uid, ?string $accountType, string $sessionKey): User|Admin|null
+    {
+        $normalizedType = strtolower(trim((string) ($accountType ?? '')));
+        if ($normalizedType === 'admins') {
+            return Admin::find($uid);
+        }
+        if ($normalizedType === 'users') {
+            return User::find($uid);
+        }
+
+        $user = User::find($uid);
+        $admin = Admin::find($uid);
+
+        if ($user && $this->sessionKeyMatches($user, $sessionKey)) {
+            return $user;
+        }
+        if ($admin && $this->sessionKeyMatches($admin, $sessionKey)) {
+            return $admin;
+        }
+
+        return $user ?: $admin;
+    }
+
+    private function sessionKeyMatches(User|Admin $account, string $sessionKey): bool
+    {
+        $currentSessionKey = trim((string) ($account->active_session_key ?? ''));
+        if ($currentSessionKey === '') {
+            return false;
+        }
+
+        return hash_equals($currentSessionKey, $sessionKey);
     }
 
     private function issueOtpForEmail(string $email, string $role): void

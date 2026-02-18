@@ -1,4 +1,5 @@
 import 'bootstrap-icons/font/bootstrap-icons.css'
+import './tailwind.css'
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './Module/routes'
@@ -12,8 +13,11 @@ let pingInFlight = false
 function readSessionPayload() {
   const uid = String(localStorage.getItem('uid') || localStorage.getItem('userUid') || '').trim()
   const sessionKey = String(localStorage.getItem('activeSessionId') || '').trim()
+  const accountType = String(localStorage.getItem('userCollection') || 'users').trim().toLowerCase() === 'admins'
+    ? 'admins'
+    : 'users'
   if (!uid || !sessionKey) return null
-  return { uid, sessionKey }
+  return { uid, sessionKey, accountType }
 }
 
 async function pingSessionLock() {

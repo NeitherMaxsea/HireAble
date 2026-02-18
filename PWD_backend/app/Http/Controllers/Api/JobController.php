@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Api;
 
@@ -22,8 +22,13 @@ class JobController extends Controller
         if ($request->filled('status')) {
             $query->where('status', (string) $request->input('status'));
         }
+        if ($request->filled('financeApprovalStatus')) {
+            $query->where('finance_approval_status', (string) $request->input('financeApprovalStatus'));
+        }
 
-        return response()->json($query->orderByDesc('created_at')->get()->map(fn ($row) => $this->normalizeRow($row)));
+        return response()->json(
+            $query->orderByDesc('created_at')->get()->map(fn ($row) => $this->normalizeRow($row))
+        );
     }
 
     public function store(Request $request): JsonResponse
@@ -32,7 +37,11 @@ class JobController extends Controller
         $id = DB::table('jobs')->insertGetId($this->toDbPayload($payload, true));
         $job = DB::table('jobs')->where('id', $id)->first();
 
-        $this->writeLog('job_posted', $payload['postedByEmail'] ?? $payload['postedByName'] ?? (string) $id, $payload['title'] ?? 'Untitled job');
+        $this->writeLog(
+            'job_posted',
+            $payload['postedByEmail'] ?? $payload['postedByName'] ?? (string) $id,
+            $payload['title'] ?? 'Untitled job'
+        );
 
         return response()->json($this->normalizeRow($job), 201);
     }
@@ -57,7 +66,24 @@ class JobController extends Controller
         DB::table('jobs')->where('id', $id)->update($this->toDbPayload($request->all(), false));
         $updated = DB::table('jobs')->where('id', $id)->first();
 
-        $this->writeLog('job_updated', $request->input('postedByEmail', 'system'), $request->input('title', $updated->title ?? 'Job updated'));
+        $financeDecision = (string) $request->input('financeApprovalStatus', '');
+        if ($financeDecision !== '') {
+            $this->writeLog(
+                'job_finance_reviewed',
+                (string) $request->input('financeReviewedByEmail', 'finance'),
+                sprintf(
+                    '%s marked as %s',
+                    $updated->title ?? 'Job',
+                    $financeDecision
+                )
+            );
+        } else {
+            $this->writeLog(
+                'job_updated',
+                $request->input('postedByEmail', 'system'),
+                $request->input('title', $updated->title ?? 'Job updated')
+            );
+        }
 
         return response()->json($this->normalizeRow($updated));
     }
@@ -77,6 +103,15 @@ class JobController extends Controller
 
     private function toDbPayload(array $payload, bool $isCreate): array
     {
+        $images = null;
+        if (array_key_exists('images', $payload)) {
+            if (is_array($payload['images'])) {
+                $images = json_encode($payload['images']);
+            } elseif (is_string($payload['images'])) {
+                $images = $payload['images'];
+            }
+        }
+
         $mapped = [
             'title' => $payload['title'] ?? null,
             'location' => $payload['location'] ?? null,
@@ -89,8 +124,34 @@ class JobController extends Controller
             'benefits' => $payload['benefits'] ?? null,
             'image_url' => $payload['imageUrl'] ?? null,
             'image_url2' => $payload['imageUrl2'] ?? null,
-            'images' => isset($payload['images']) ? json_encode($payload['images']) : null,
-            'status' => $payload['status'] ?? 'open',
+            'images' => $images,
+            'status' => array_key_exists('status', $payload)
+                ? $payload['status']
+                : ($isCreate ? 'pending_finance_review' : null),
+            'finance_approval_status' => array_key_exists('financeApprovalStatus', $payload)
+                ? $payload['financeApprovalStatus']
+                : ($isCreate ? 'pending' : null),
+            'finance_approval_note' => array_key_exists('financeApprovalNote', $payload)
+                ? $payload['financeApprovalNote']
+                : null,
+            'finance_rejection_reason' => array_key_exists('financeRejectionReason', $payload)
+                ? $payload['financeRejectionReason']
+                : null,
+            'finance_reviewed_by_uid' => array_key_exists('financeReviewedByUid', $payload)
+                ? $payload['financeReviewedByUid']
+                : null,
+            'finance_reviewed_by_name' => array_key_exists('financeReviewedByName', $payload)
+                ? $payload['financeReviewedByName']
+                : null,
+            'finance_reviewed_by_email' => array_key_exists('financeReviewedByEmail', $payload)
+                ? $payload['financeReviewedByEmail']
+                : null,
+            'finance_reviewed_at' => array_key_exists('financeReviewedAt', $payload)
+                ? $payload['financeReviewedAt']
+                : null,
+            'published_at' => array_key_exists('publishedAt', $payload)
+                ? $payload['publishedAt']
+                : null,
             'posted_by_name' => $payload['postedByName'] ?? null,
             'posted_by_email' => $payload['postedByEmail'] ?? null,
             'posted_by_role' => $payload['postedByRole'] ?? null,
@@ -125,6 +186,14 @@ class JobController extends Controller
             'imageUrl2' => $row->image_url2,
             'images' => $row->images ? json_decode($row->images, true) : [],
             'status' => $row->status,
+            'financeApprovalStatus' => $row->finance_approval_status,
+            'financeApprovalNote' => $row->finance_approval_note,
+            'financeRejectionReason' => $row->finance_rejection_reason,
+            'financeReviewedByUid' => $row->finance_reviewed_by_uid,
+            'financeReviewedByName' => $row->finance_reviewed_by_name,
+            'financeReviewedByEmail' => $row->finance_reviewed_by_email,
+            'financeReviewedAt' => $row->finance_reviewed_at ? (string) $row->finance_reviewed_at : null,
+            'publishedAt' => $row->published_at ? (string) $row->published_at : null,
             'postedByName' => $row->posted_by_name,
             'postedByEmail' => $row->posted_by_email,
             'postedByRole' => $row->posted_by_role,

@@ -10,6 +10,7 @@ import ResetPassword from "@/Module/Authentication/reset-password-pages.vue"
 
 // LANDING PAGE
 import LandingPage from "@/Landingpage.vue"
+import SearchJobsPage from "@/SearchJobsPage.vue"
 
 // ADMIN
 import AdminLayout from "@/Module/Admin/layout/adminlayout.vue"
@@ -24,6 +25,8 @@ import EmployerDashboard from "@/Module/Employer/views/HR/dashboard.vue"
 import Applicant from "@/Module/Employer/views/HR/Applicant.vue"
 import EmployeeRecord from "@/Module/Employer/views/HR/EmployeeRecord.vue"
 import EmployerProfile from "@/Module/Employer/views/HR/Profile.vue"
+import EmployerJobPost from "@/Module/Employer/views/HR/Job-management/Job-post-pages.vue"
+import EmployerJobList from "@/Module/Employer/views/HR/Job-management/Job-list_pages.vue"
 
 // EMPLOYER OPERATIONS
 import OperationsDashboard from "@/Module/Employer/views/Operation/OperationsDashboard.vue"
@@ -59,14 +62,27 @@ function isUserAuthenticated() {
 function getUserRole() {
   const role = localStorage.getItem("userRole")
   if (!role) return null
-  return String(role).trim().toLowerCase().replace(/[\s-]+/g, "_")
+  return normalizeAuthRole(role)
+}
+
+function normalizeAuthRole(role) {
+  const value = String(role || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
+  if (value === "hr_department") return "hr"
+  if (value === "operation_department") return "operation"
+  if (value === "financial_department" || value === "finance_department") return "finance"
+  if (value === "company_admin" || value === "companyadmin") return "company_admin"
+  return value
 }
 
 function getHomeRouteByRole(role, fromRoute = null) {
-  if (role === "applicant") return { path: "/applicant/job_list" }
-  if (role === "admin") return { path: "/admin/dashboard" }
-  if (role === "company_admin") return { path: "/company-admin/dashboard" }
-  if (role === "employer") return { path: "/employer/HR/dashboard" }
+  const normalizedRole = normalizeAuthRole(role)
+  if (normalizedRole === "applicant") return { path: "/applicant/job_list" }
+  if (normalizedRole === "admin") return { path: "/admin/dashboard" }
+  if (normalizedRole === "company_admin") return { path: "/company-admin/dashboard" }
+  if (normalizedRole === "employer") return { path: "/employer/HR/dashboard" }
+  if (normalizedRole === "hr") return { path: "/employer/HR/dashboard" }
+  if (normalizedRole === "operation") return { path: "/employer/operation/dashboard" }
+  if (normalizedRole === "finance") return { path: "/employer/finance/dashboard" }
 
   // If role is missing/unknown but user came from an authenticated route,
   // keep them inside the protected area instead of sending to landing page.
@@ -75,6 +91,25 @@ function getHomeRouteByRole(role, fromRoute = null) {
   }
 
   return { name: "LandingPage" }
+}
+
+function roleMatchesRequired(requiredRole, userRole) {
+  const role = normalizeAuthRole(userRole)
+  const required = normalizeAuthRole(requiredRole)
+  const employerRoles = ["employer", "hr", "finance", "operation"]
+
+  if (!required) return true
+  if (required === role) return true
+  if (required === "employer" && employerRoles.includes(role)) return true
+  return false
+}
+
+function isAllowedRole(requiredRole, userRole) {
+  if (!requiredRole) return true
+  if (Array.isArray(requiredRole)) {
+    return requiredRole.some((entry) => roleMatchesRequired(entry, userRole))
+  }
+  return roleMatchesRequired(requiredRole, userRole)
 }
 
 const routes = [
@@ -88,8 +123,14 @@ const routes = [
     meta: { title: "PWD Job Portal | Home", requiresAuth: false },
   },
   {
+    path: "/search-jobs",
+    name: "SearchJobs",
+    component: SearchJobsPage,
+    meta: { title: "PWD Job Portal | Search Jobs", requiresAuth: false },
+  },
+  {
     path: "/find-jobs",
-    redirect: "/applicant/job_list",
+    redirect: "/search-jobs",
   },
 
   // ================= AUTH =================
@@ -221,6 +262,26 @@ const routes = [
         component: EmployerProfile,
         meta: {
           title: "PWD Job Portal | Employer Profile",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "job-management/job-post",
+        name: "EmployerJobPost",
+        component: EmployerJobPost,
+        meta: {
+          title: "PWD Job Portal | Job Post",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "job-management/job-list",
+        name: "EmployerJobList",
+        component: EmployerJobList,
+        meta: {
+          title: "PWD Job Portal | Job List",
           requiresAuth: true,
           requiredRole: "employer",
         },
@@ -434,11 +495,7 @@ router.beforeEach((to, from, next) => {
     if (!isAuthenticated) {
       // User not logged in, redirect to login
       next({ name: "Login", query: { redirect: to.fullPath } })
-    } else if (
-      requiredRole &&
-      ((Array.isArray(requiredRole) && !requiredRole.includes(userRole)) ||
-        (!Array.isArray(requiredRole) && userRole !== requiredRole))
-    ) {
+    } else if (!isAllowedRole(requiredRole, userRole)) {
       // User logged in but doesn't have required role
       next({ name: "LandingPage" })
     } else {

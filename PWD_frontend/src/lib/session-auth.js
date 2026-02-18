@@ -5,8 +5,11 @@ const listeners = new Set()
 function readCurrentUser() {
   const uid = String(localStorage.getItem("uid") || localStorage.getItem("userUid") || "").trim()
   const email = String(localStorage.getItem("userEmail") || "").trim()
+  const accountType = String(localStorage.getItem("userCollection") || "users").trim().toLowerCase() === "admins"
+    ? "admins"
+    : "users"
   if (!uid) return null
-  return { uid, email }
+  return { uid, email, accountType }
 }
 
 let currentUser = readCurrentUser()
@@ -27,7 +30,13 @@ Object.defineProperty(auth, "currentUser", {
     return currentUser
   },
   set(value) {
-    currentUser = value && value.uid ? { uid: String(value.uid), email: String(value.email || "") } : null
+    currentUser = value && value.uid
+      ? {
+          uid: String(value.uid),
+          email: String(value.email || ""),
+          accountType: String(value.accountType || "users"),
+        }
+      : null
     emitAuth()
   },
 })
@@ -59,11 +68,15 @@ function clearLocalSession() {
 async function releaseServerSessionLock() {
   const uid = String(localStorage.getItem("uid") || localStorage.getItem("userUid") || "").trim()
   const sessionKey = String(localStorage.getItem("activeSessionId") || "").trim()
+  const accountType = String(localStorage.getItem("userCollection") || "users").trim().toLowerCase() === "admins"
+    ? "admins"
+    : "users"
   if (!uid || !sessionKey) return
 
   await api.post("/auth/session/logout", {
     uid,
     sessionKey,
+    accountType,
   })
 }
 

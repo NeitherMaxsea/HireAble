@@ -77,7 +77,7 @@ class UserController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = User::query();
+        $query = User::query()->whereRaw('LOWER(COALESCE(role, "")) != ?', ['admin']);
 
         if ($request->filled('companyId')) {
             $query->where('company_id', (string) $request->input('companyId'));
@@ -126,6 +126,10 @@ class UserController extends Controller
             'activeSessionKey' => ['nullable', 'string', 'max:191'],
             'sessionLastSeenAt' => ['nullable'],
         ]);
+
+        if (array_key_exists('role', $payload) && strtolower(trim((string) ($payload['role'] ?? ''))) === 'admin') {
+            return response()->json(['message' => 'Admin accounts are managed separately.'], 422);
+        }
 
         if (array_key_exists('username', $payload) && !array_key_exists('name', $payload)) {
             $payload['name'] = $payload['username'];

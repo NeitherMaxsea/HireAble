@@ -1,5 +1,25 @@
 <template>
-  <div class="page">
+  <div class="page" :class="{ 'page-ready': !showPageLoader }">
+    <transition name="page-loader-fade">
+      <div
+        v-if="showPageLoader"
+        class="page-loader-overlay"
+        role="status"
+        aria-live="polite"
+        aria-label="Loading landing page"
+      >
+        <div class="dot-spinner" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+    </transition>
 
   <!-- 
 <div v-if="maintenanceMode" class="maintenance-overlay">
@@ -26,92 +46,154 @@
 
     <!-- TOP NAVBAR -->
 
-<header 
-  class="navbar" 
-  :class="{ 'hide': hideNav, 'scrolled': isScrolled }"
->
+<header class="navbar" :class="{ 'navbar-scrolled': isScrolled }">
   <div class="nav-inner">
-    <div class="nav-left">
-      <img 
-        :src="isScrolled ? logoScrolled : logoDefault" 
-        class="logo" 
-        alt="PWD EAP Logo"
-        @click="scrollTop" 
-      />
-    </div>
+    <button class="nav-left" type="button" @click="scrollTop">
+      <img :src="isScrolled ? logoScrolled : logoDefault" class="logo" alt="HireAble logo" />
+    </button>
 
-    
     <nav class="nav-center">
-      <div 
-        v-for="item in navItems" 
-        :key="item.id" 
-        class="nav-item"
-        @mouseenter="openDropdown = item.id"
-        @mouseleave="openDropdown = null"
-      >
-        <a href="#" class="nav-link" @click.prevent="onNavClick(item)">
-          {{ item.label }}
-          <svg 
-            v-if="item.children" 
-            class="dropdown-arrow" 
-            :class="{ rotate: openDropdown === item.id }"
-            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
+      <router-link to="/search-jobs" class="nav-link">Find Job</router-link>
+      <div class="nav-dropdown" :class="{ open: openDropdown === 'about-menu' }">
+        <button
+          type="button"
+          class="nav-link nav-dropdown-toggle"
+          aria-haspopup="menu"
+          :aria-expanded="openDropdown === 'about-menu'"
+          @click.stop="toggleAboutDropdown"
+        >
+          About Us
+          <svg class="nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m6 9 6 6 6-6"></path>
           </svg>
-        </a>
+        </button>
 
-        <transition name="dropdown-slide">
-          <div 
-            v-if="item.children && openDropdown === item.id" 
-            class="dropdown-menu"
+        <transition name="nav-dropdown">
+          <div
+            v-if="openDropdown === 'about-menu'"
+            class="nav-dropdown-menu"
+            role="menu"
+            aria-label="About Us menu"
           >
-            <a 
-              v-for="child in item.children" 
-              :key="child.id" 
-              href="#" 
-              class="dropdown-item"
-              @click.prevent="handleNavTarget(child.id)"
-            >
-              {{ child.label }}
-            </a>
+            <button type="button" class="nav-dropdown-item" role="menuitem" @click="scrollTo('mission')">
+              Mission
+            </button>
+            <button type="button" class="nav-dropdown-item" role="menuitem" @click="scrollTo('vision')">
+              Vision
+            </button>
           </div>
         </transition>
       </div>
+      <a href="#tutorial" class="nav-link" @click.prevent="scrollTo('tutorial')">Read First</a>
+      <a href="#privacy" class="nav-link" @click.prevent="scrollTo('privacy')">Privacy</a>
+      <a href="#contact" class="nav-link" @click.prevent="scrollTo('contact')">Contact Us</a>
     </nav>
 
     <div class="nav-right">
-      <div class="nav-actions">
-        <router-link to="/find-jobs" class="btn btn-find">
-          Find a Job
-        </router-link>
-        <router-link :to="{ path: '/login', query: { force: '1' } }" class="btn btn-login">
-          Login
-        </router-link>
-      </div>
-      
-      <button class="mobile-toggle" @click="isMobileMenuOpen = !isMobileMenuOpen">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
+      <router-link :to="{ path: '/login', query: { force: '1' } }" class="sign-in-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="8" r="3.25"></circle>
+          <path d="M5 19c0-3.1 2.52-5.6 5.63-5.6h.74c3.1 0 5.63 2.5 5.63 5.6"></path>
+          <path d="M19 8h3"></path>
+        </svg>
+        Sign In
+      </router-link>
     </div>
   </div>
 </header>
 
-    <!-- HERO -->
-    <section id="home" class="hero">
-      <div class="hero-content">
+    <nav class="section-nav" aria-label="Page sections">
+      <button
+        v-for="item in sectionNavItems"
+        :key="item.id"
+        type="button"
+        class="section-nav-btn"
+        :class="{ active: activeSection === item.id }"
+        @click="scrollTo(item.id)"
+      >
+        <span class="section-nav-dot" aria-hidden="true"></span>
+        <span class="section-nav-label">{{ item.label }}</span>
+      </button>
+    </nav>
 
-        <h1>
-          Employment Assistance Platform for PWD in The City of
-          Dasmarinas with Decision Support System
-        </h1>
-        <p class="hero-desc">
-          Connecting PWDs to inclusive job opportunities through smart decision support.
-        </p>
-        <div class="hero-actions">
-          <router-link to="/find-jobs" class="btn hero-btn primary">Find a Job</router-link>
+    <!-- HERO -->
+    <section id="home" class="hero" :style="heroParallaxStyle">
+      <div class="hero-shell">
+        <div class="hero-content">
+          <h1>
+            Employment Assistance Platform for Persons with Disabilities in The
+            City of Dasmarinas with Decision Support System
+          </h1>
+          <p class="hero-desc">
+            Helping Persons with Disabilities discover opportunities that match
+            their skills and potential.
+          </p>
+
+          <form
+            class="hero-search"
+            role="search"
+            aria-label="Hero job search filters"
+            @submit.prevent="submitHeroSearch"
+          >
+            <label class="search-field search-field-text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m20 20-3.4-3.4"></path>
+              </svg>
+              <input
+                v-model.trim="heroFilters.keyword"
+                type="text"
+                placeholder="Job Title Keywords"
+                aria-label="Job title keywords"
+              />
+            </label>
+
+            <label class="search-field search-field-select">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 21s6-5.3 6-10a6 6 0 1 0-12 0c0 4.7 6 10 6 10z"></path>
+                <circle cx="12" cy="11" r="2.4"></circle>
+              </svg>
+              <select v-model="heroFilters.location" aria-label="Barangay location">
+                <option value="">All Barangays in Dasmarinas, Cavite</option>
+                <option
+                  v-for="barangay in dasmaBarangays"
+                  :key="barangay"
+                  :value="barangay"
+                >
+                  {{ barangay }}
+                </option>
+              </select>
+              <svg class="search-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>
+            </label>
+
+            <label class="search-field search-field-select">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 7h16"></path>
+                <path d="M4 12h16"></path>
+                <path d="M4 17h16"></path>
+              </svg>
+              <select v-model="heroFilters.category" aria-label="Job category">
+                <option value="">All Job Categories</option>
+                <option
+                  v-for="category in heroCategories"
+                  :key="category"
+                  :value="category"
+                >
+                  {{ category }}
+                </option>
+              </select>
+              <svg class="search-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>
+            </label>
+            <button type="submit" class="search-submit">Search</button>
+          </form>
+        </div>
+
+        <div class="hero-logo-wrap">
+          <img :src="heroSeal" alt="HireAble Proximity Development logo" class="hero-seal" />
         </div>
       </div>
     </section>
@@ -149,6 +231,22 @@
             PWD talent, reducing hiring barriers, and creating a more connected
             local employment ecosystem.
           </p>
+
+          <div id="mission" class="about-focus-card">
+            <h4>Mission</h4>
+            <p>
+              To empower Persons with Disabilities by connecting them to inclusive
+              employment opportunities through an accessible and data-guided platform.
+            </p>
+          </div>
+
+          <div id="vision" class="about-focus-card">
+            <h4>Vision</h4>
+            <p>
+              A community where every qualified PWD can access fair, meaningful,
+              and sustainable work opportunities without barriers.
+            </p>
+          </div>
         </div>
       </div>
     </section>
@@ -158,14 +256,7 @@
       <div class="tutorial-card">
         <div class="video-pane">
           <div class="video-placeholder">
-            <iframe
-              class="tutorial-video"
-              :src="tutorialVideoSrc"
-              title="PWD Tutorial Video"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              referrerpolicy="strict-origin-when-cross-origin"
-              allowfullscreen
-            ></iframe>
+            <div class="tutorial-video tutorial-video-blank" aria-label="Blank tutorial area"></div>
           </div>
         </div>
 
@@ -192,111 +283,104 @@
     </section>
 
     <!-- FAQ -->
+    <!-- FAQ -->
     <section id="contact" class="faq-section">
-      <div class="faq-header">
-        <span class="faq-badge">Frequently Asked Questions</span>
-        <h2>Common Questions & Answers</h2>
-        <p>Everything you need to know about our platform</p>
-      </div>
-
-      <div
-        v-for="(faq, index) in faqs"
-        :key="index"
-        class="faq-item"
-      >
-        <div class="faq-question" @click="toggleFaq(index)">
-          {{ faq.q }}
-          <span class="arrow" :class="{ open: activeFaq === index }">⌄</span>
+      <div class="faq-shell">
+        <div class="faq-header">
+          <span class="faq-badge">Frequently Asked Questions</span>
+          <h2>Common Questions & Answers</h2>
+          <p>Everything you need to know about our platform</p>
         </div>
 
-   <transition name="faq-slide">
-  <div v-show="activeFaq === index" class="faq-answer">
-    {{ faq.a }}
-  </div>
-</transition>
+        <div class="faq-list">
+          <div
+            v-for="(faq, index) in faqs"
+            :key="index"
+            class="faq-item"
+          >
+            <button type="button" class="faq-question" @click="toggleFaq(index)">
+              <span>{{ faq.q }}</span>
+              <svg class="arrow" :class="{ open: activeFaq === index }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                <path d="m6 9 6 7 6-7"></path>
+              </svg>
+            </button>
 
+            <transition name="faq-slide">
+              <div v-show="activeFaq === index" class="faq-answer">
+                {{ faq.a }}
+              </div>
+            </transition>
+          </div>
+        </div>
       </div>
     </section>
-  <footer class="footer">
-    <div class="footer-container">
-      <div class="footer-brand">
-        <div class="logo-wrapper">
-          <div class="logo-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-            </svg>
+
+    <footer id="privacy" class="footer">
+      <div class="footer-container">
+        <div class="footer-brand">
+          <img :src="footerLogo" alt="HireAble Logo" class="footer-logo" />
+          <p class="brand-text">
+            This site is managed by RCST students as part of the development of a web-based job employment assistance
+            platform for Persons with Disabilities in the City of Dasmarinas with Decision Support System.
+          </p>
+          <div class="social-wrapper">
+            <a href="#" class="social-link" aria-label="Facebook">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
+            </a>
+            <a href="#" class="social-link" aria-label="Instagram">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+            </a>
+            <a href="#" class="social-link" aria-label="LinkedIn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+            </a>
           </div>
-          <h2 class="logo-type">PWD <span>EAP</span></h2>
         </div>
-        <p class="brand-text">
-          A Decision Support System-powered platform bridging the gap between talent and inclusive opportunity.
-        </p>
-        <div class="social-wrapper">
-          <a href="#" class="social-link" aria-label="Facebook">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
-          </a>
-          <a href="#" class="social-link" aria-label="Instagram">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-          </a>
-          <a href="#" class="social-link" aria-label="LinkedIn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
-          </a>
+
+        <div class="footer-nav">
+          <div class="nav-group about-group">
+            <h3>About PWD Hireable Proximity</h3>
+            <p>
+              A powerful job site that aims to connect Persons with Disabilities with companies while promoting awareness
+              of the importance of providing equal and gainful employment opportunities.
+            </p>
+          </div>
+
+          <div class="nav-group services-group">
+            <h3>Services</h3>
+            <ul>
+              <li><a href="#">Job Matching</a></li>
+              <li><a href="#">DSS Analysis</a></li>
+              <li><a href="#">Employer Portal</a></li>
+            </ul>
+          </div>
         </div>
       </div>
 
-      <div class="footer-nav">
-        <div class="nav-group">
-          <h3>Services</h3>
-          <ul>
-            <li><a href="#">Job Matching</a></li>
-            <li><a href="#">DSS Analysis</a></li>
-            <li><a href="#">Employer Portal</a></li>
-          </ul>
-        </div>
-
-        <div class="nav-group">
-          <h3>Information</h3>
-          <ul>
-            <li><a href="#">Accessibility Guide</a></li>
-            <li><a href="#">Privacy Policy</a></li>
-            <li><a href="#">Documentation</a></li>
-          </ul>
-        </div>
-
-        <div class="nav-group">
-          <h3>Contact Us</h3>
-          <ul>
-            <li><a href="mailto:contact@pwdeap.ph">contact@pwdeap.ph</a></li>
-            <li><a href="tel:+6328000000">+63 (2) 800-0000</a></li>
-            <li><a href="#">Support Ticket</a></li>
-          </ul>
+      <div class="footer-bottom">
+        <div class="bottom-inner">
+          <p>&copy; 2026 PWD Employment Assistance Platform. Developed for Research Purposes.</p>
         </div>
       </div>
-    </div>
-
-    <div class="footer-bottom">
-      <div class="bottom-inner">
-        <p>&copy; 2026 PWD Employment Assistance Platform. Developed for Research Purposes.</p>
-        <div class="status-indicator">
-          <span class="status-dot"></span> System Operational
-        </div>
-      </div>
-    </div>
-  </footer>
+    </footer>
   </div>
 </template>
 
 <script>
-import logoDefault from "@/assets/titlelogo.png";
-import logoScrolled from "@/assets/titlelogo-white.png";
+import proximityLogo from "@/assets/proximity.png";
+import heroSeal from "@/assets/logoproximity.png";
+import aboutPhoto from "@/assets/PWD_worker.png";
 
 export default {
   name: "LandingPage",
 
   data() {
     return {
-      logoDefault,
-      logoScrolled,
+      logoDefault: proximityLogo,
+      logoScrolled: proximityLogo,
+      heroSeal,
+      footerLogo: proximityLogo,
+      showPageLoader: true,
+      pageLoaderTimer: null,
         maintenanceMode: true, // 🔥 toggle mo lang to false pag live na
       tutorialObserver: null,
       isTutorialInView: false,
@@ -304,11 +388,120 @@ export default {
       lastY: 0,
       hideNav: false,
       isScrolled: false,
+      heroParallaxY: 0,
       activeFaq: null,
+      activeSection: "home",
+      sectionNavItems: [
+        { id: "home", label: "Home" },
+        { id: "about", label: "About" },
+        { id: "mission", label: "Mission" },
+        { id: "vision", label: "Vision" },
+        { id: "tutorial", label: "Tutorial" },
+        { id: "contact", label: "FAQs" },
+        { id: "privacy", label: "Privacy" }
+      ],
+      heroFilters: {
+        keyword: "",
+        location: "",
+        category: ""
+      },
+      dasmaBarangays: [
+        "Burol I",
+        "Burol II",
+        "Burol III",
+        "Datu Esmael (Bago-a-ingud)",
+        "Emmanuel Bergado I",
+        "Emmanuel Bergado II",
+        "Fatima I",
+        "Fatima II",
+        "Fatima III",
+        "H-2",
+        "Langkaan I",
+        "Langkaan II",
+        "Luzviminda I",
+        "Luzviminda II",
+        "Paliparan I",
+        "Paliparan II",
+        "Paliparan III",
+        "Sabang",
+        "Salawag",
+        "Salitran I",
+        "Salitran II",
+        "Salitran III",
+        "Salitran IV",
+        "Sampaloc I",
+        "Sampaloc II",
+        "Sampaloc III",
+        "Sampaloc IV",
+        "Sampaloc V",
+        "San Agustin I",
+        "San Agustin II",
+        "San Agustin III",
+        "San Andres I",
+        "San Andres II",
+        "San Antonio de Padua I",
+        "San Antonio de Padua II",
+        "San Dionisio (Barangay I)",
+        "San Esteban (Barangay IV)",
+        "San Francisco I",
+        "San Francisco II",
+        "San Isidro Labrador I",
+        "San Isidro Labrador II",
+        "San Jose",
+        "San Juan (San Juan I)",
+        "San Lorenzo Ruiz I",
+        "San Lorenzo Ruiz II",
+        "San Luis I",
+        "San Luis II",
+        "San Manuel I",
+        "San Manuel II",
+        "San Mateo",
+        "San Miguel",
+        "San Nicolas I",
+        "San Nicolas II",
+        "San Roque (Sta. Cristina II)",
+        "San Simon (Barangay VII)",
+        "Santa Cristina I",
+        "Santa Cruz I",
+        "Santa Cruz II",
+        "Santa Fe",
+        "Santa Lucia (San Juan II)",
+        "Santa Maria (Barangay XX)",
+        "Santo Cristo (Barangay II-A)",
+        "Santo Nino I",
+        "Santo Nino II",
+        "Victoria Reyes",
+        "Zone I (Poblacion)",
+        "Zone I-A (Poblacion)",
+        "Zone II (Poblacion)",
+        "Zone III (Poblacion)",
+        "Zone IV (Poblacion)",
+        "Zone IV-A (Poblacion)",
+        "Zone V (Poblacion)",
+        "Zone VI (Poblacion)",
+        "Zone VII (Poblacion)",
+        "Zone VIII (Poblacion)",
+        "Zone IX (Poblacion)",
+        "Zone X (Poblacion)",
+        "Zone XI (Poblacion)",
+        "Zone XII (Poblacion)"
+      ],
+      heroCategories: [
+        "Administrative and Office Support",
+        "Construction and Skilled Trades",
+        "Customer Service and BPO",
+        "Education and Training",
+        "Food and Hospitality",
+        "Government and Public Service",
+        "Healthcare and Caregiving",
+        "Information Technology",
+        "Logistics and Transportation",
+        "Manufacturing and Production",
+        "Retail and Sales",
+        "Security and Safety"
+      ],
       aboutImages: [
-        "https://placehold.co/640x420/e5e7eb/334155?text=About+Image+1",
-        "https://placehold.co/640x420/dbeafe/1e3a8a?text=About+Image+2",
-        "https://placehold.co/640x420/fee2e2/7f1d1d?text=About+Image+3"
+        aboutPhoto
       ],
 
 
@@ -320,14 +513,6 @@ export default {
           children: [
             { id: "about", label: "Overview" },
             { id: "tutorial", label: "Tutorial" }
-          ]
-        },
-        {
-          id: "jobs",
-          label: "Jobs",
-          children: [
-            { id: "find-jobs", label: "Find Jobs" },
-            { id: "post-job", label: "Post Job" }
           ]
         },
         { id: "contact", label: "Contact" }
@@ -386,17 +571,33 @@ export default {
     };
   },
 mounted() {
+  this.pageLoaderTimer = window.setTimeout(() => {
+    this.showPageLoader = false;
+    this.pageLoaderTimer = null;
+  }, 850);
   window.addEventListener("scroll", this.onScroll, { passive: true });
+  document.addEventListener("click", this.closeDropdown);
+  this.onScroll();
   this.setupTutorialObserver();
 },
 beforeUnmount() {
+  if (this.pageLoaderTimer) {
+    window.clearTimeout(this.pageLoaderTimer);
+    this.pageLoaderTimer = null;
+  }
   window.removeEventListener("scroll", this.onScroll);
+  document.removeEventListener("click", this.closeDropdown);
   this.teardownTutorialObserver();
 },
 
 computed: {
+  heroParallaxStyle() {
+    return {
+      backgroundPosition: `center calc(50% + ${this.heroParallaxY}px)`
+    };
+  },
   tutorialVideoSrc() {
-    const base = "https://www.youtube.com/embed/OMUUMlRpc-8";
+    const base = "https://www.youtube.com/embed/J1Ip2sC_lss";
     return this.isTutorialInView
       ? `${base}?autoplay=1&mute=1&playsinline=1`
       : `${base}?autoplay=0&mute=1&playsinline=1`;
@@ -441,6 +642,11 @@ toggleFaq(i) {
   }
 },
 
+  toggleAboutDropdown() {
+    this.openDropdown =
+      this.openDropdown === "about-menu" ? null : "about-menu";
+  },
+
 
   onNavClick(item) {
     if (item.children) {
@@ -454,7 +660,7 @@ toggleFaq(i) {
   handleNavTarget(id) {
     if (id === "find-jobs") {
       this.openDropdown = null;
-      this.$router.push("/find-jobs");
+      this.$router.push("/search-jobs");
       return;
     }
 
@@ -469,24 +675,52 @@ toggleFaq(i) {
 
   scrollTo(id) {
     this.openDropdown = null;
+    this.activeSection = id;
     document.getElementById(id)?.scrollIntoView({
       behavior: "smooth"
     });
+  },
+
+  updateActiveSection() {
+    const offsetY = 140;
+    const probeY = window.scrollY + offsetY;
+    const items = Array.isArray(this.sectionNavItems) ? this.sectionNavItems : [];
+    if (!items.length) return;
+
+    let current = items[0].id;
+    for (const item of items) {
+      const el = document.getElementById(item.id);
+      if (!el) continue;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      if (top <= probeY) current = item.id;
+    }
+    this.activeSection = current;
   },
 
   scrollTop() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   },
 
+  submitHeroSearch() {
+    const query = {};
+    if (this.heroFilters.keyword) query.keyword = this.heroFilters.keyword;
+    if (this.heroFilters.location) query.location = this.heroFilters.location;
+    if (this.heroFilters.category) query.category = this.heroFilters.category;
+
+    this.$router.push({ name: "SearchJobs", query });
+  },
+
   onScroll() {
     const y = window.scrollY;
     this.hideNav = y > this.lastY && y > 120;
     this.isScrolled = y > 10;
+    this.heroParallaxY = Math.min(y * 0.22, 180);
     this.lastY = y;
+    this.updateActiveSection();
   },
 
   closeDropdown(e) {
-    if (!e.target.closest(".nav-item")) {
+    if (!e.target.closest(".nav-dropdown")) {
       this.openDropdown = null;
     }
   }
@@ -523,151 +757,391 @@ h1, h2, h3, h4, h5, h6{
   font-family: "Poppins", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   letter-spacing: 0.2px;
 }
-/* NAVBAR BASE */
-/* NAVBAR CONTAINER */
+
+.page-loader-fade-enter-active,
+.page-loader-fade-leave-active {
+  transition: opacity 0.35s ease;
+}
+
+.page-loader-fade-enter-from,
+.page-loader-fade-leave-to {
+  opacity: 0;
+}
+
+.page-loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  background: #dedfe1;
+}
+
+.dot-spinner {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  animation: dot-ring-spin 1.08s linear infinite;
+}
+
+.dot-spinner span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 999px;
+  background: #2cb9b0;
+  opacity: 0.38;
+  animation: dot-fade 0.95s ease-in-out infinite;
+}
+
+.dot-spinner span:nth-child(1) {
+  transform: rotate(0deg) translateY(-20px);
+  animation-delay: 0s;
+}
+
+.dot-spinner span:nth-child(2) {
+  transform: rotate(45deg) translateY(-20px);
+  animation-delay: 0.08s;
+}
+
+.dot-spinner span:nth-child(3) {
+  transform: rotate(90deg) translateY(-20px);
+  animation-delay: 0.16s;
+}
+
+.dot-spinner span:nth-child(4) {
+  transform: rotate(135deg) translateY(-20px);
+  animation-delay: 0.24s;
+}
+
+.dot-spinner span:nth-child(5) {
+  transform: rotate(180deg) translateY(-20px);
+  animation-delay: 0.32s;
+}
+
+.dot-spinner span:nth-child(6) {
+  transform: rotate(225deg) translateY(-20px);
+  animation-delay: 0.4s;
+}
+
+.dot-spinner span:nth-child(7) {
+  transform: rotate(270deg) translateY(-20px);
+  animation-delay: 0.48s;
+}
+
+.dot-spinner span:nth-child(8) {
+  transform: rotate(315deg) translateY(-20px);
+  animation-delay: 0.56s;
+}
+
+@keyframes dot-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dot-fade {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+/* NAVBAR */
 .navbar {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 85px;
-  color: black;
-  background-color: #ffffff; /* Solid Slate for initial visibility */
+  height: 86px;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #d6d7db;
+  box-shadow: 0 0 0 rgba(15, 23, 42, 0);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  padding: 0 20px;
   display: flex;
   align-items: center;
-  transition: all 0.3s ease-in-out;
-  z-index: 1000;
-  padding: 0 4%;
-  box-sizing: border-box;
-  pointer-events: auto;
+  transition:
+    background-color 0.28s ease,
+    border-color 0.28s ease,
+    box-shadow 0.28s ease,
+    height 0.28s ease;
 }
 
-/* SCROLLED STATE (Glassmorphism) */
-.navbar.scrolled {
-  height: 75px;
-  background-color: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-}
-
-.navbar.hide {
-  transform: translateY(-100%);
+.navbar.navbar-scrolled {
+  height: 78px;
+  background: rgba(10, 59, 30, 0.95);
+  border-bottom-color: rgba(244, 196, 31, 0.35);
+  box-shadow: 0 14px 28px rgba(2, 16, 11, 0.3);
 }
 
 .nav-inner {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1220px;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  pointer-events: auto;
+  gap: 18px;
 }
 
-/* 1. LEFT SIDE: LOGO */
 .nav-left {
-  flex: 1;
-  display: flex;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
   align-items: center;
-}
-
-.logo {
-  height: 78px;
   cursor: pointer;
 }
 
-/* 2. CENTER: NAVIGATION LINKS (CRITICAL FIX) */
+.logo {
+  display: block;
+  height: 72px;
+  width: auto;
+  transition: height 0.28s ease, filter 0.28s ease;
+}
+
+.navbar.navbar-scrolled .logo {
+  height: 62px;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.32));
+}
+
 .nav-center {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 30px;
+  justify-content: center;
+  gap: 28px;
 }
 
-.nav-item {
+.nav-dropdown {
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
 }
 
-.nav-link {
-  color: #000000;              /* default = black (white navbar) */
-  text-decoration: none;
-  font-size: 0.95rem;
-  font-weight:500;
-  letter-spacing: 0.5px;
-  display: flex;
+.nav-dropdown-toggle {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 10px 0;
-  transition: color 0.3s ease;
-}
-.nav-link:hover {
-  color: #2563eb; /* blue hover sa white navbar */
+  gap: 4px;
 }
 
-.navbar.scrolled .nav-link:hover {
-  color: #93c5fd; /* light blue hover sa dark navbar */
+.nav-caret {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.2s ease;
 }
 
-.navbar.scrolled .nav-link{
-  color:#fff;                /* white text */
-}
-
-.dropdown-arrow {
-  width: 14px;
-  height: 14px;
-  transition: transform 0.3s ease;
-}
-
-.dropdown-arrow.rotate {
+.nav-dropdown.open .nav-caret {
   transform: rotate(180deg);
 }
 
-/* 3. DROPDOWN MENU (WHITE THEME FIX) */
-.dropdown-menu {
+.nav-dropdown-menu {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  background: #ffffff; /* WHITE BACKGROUND */
-  min-width: 180px;
+  min-width: 156px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
   border-radius: 10px;
+  box-shadow: 0 14px 26px rgba(2, 16, 11, 0.15);
   padding: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
-  z-index: 1100;
-  margin-top: 5px;
+  display: grid;
+  gap: 6px;
+  z-index: 12;
 }
 
-.dropdown-item {
-  color: #1e293b; /* DARK TEXT */
+.nav-dropdown-item {
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 9px 10px;
+  text-align: left;
+  color: #111827;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.nav-dropdown-item:hover {
+  background: #f3f4f6;
+  color: #0f5132;
+}
+
+.nav-dropdown-enter-active,
+.nav-dropdown-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.nav-dropdown-enter-from,
+.nav-dropdown-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -4px);
+}
+
+.nav-link {
+  color: #111827;
   text-decoration: none;
-  display: block;
-  padding: 10px 15px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  border-radius: 6px;
-  transition: all 0.2s ease;
+  font-size: 0.73rem;
+  font-weight: 600;
+  letter-spacing: 0.12px;
+  transition: color 0.24s ease, opacity 0.24s ease;
 }
 
-.dropdown-item:hover {
-  background-color: #f1f5f9;
-  color: #38bdf8;
-  padding-left: 20px;
+.nav-link:hover {
+  color: #0f5132;
 }
 
-/* 4. RIGHT SIDE: ACTION BUTTONS */
+.navbar.navbar-scrolled .nav-link {
+  color: #f8fafc;
+}
+
+.navbar.navbar-scrolled .nav-link:hover {
+  color: #facc15;
+}
+
+.navbar.navbar-scrolled .nav-dropdown-menu {
+  background: #123a23;
+  border-color: rgba(244, 196, 31, 0.35);
+  box-shadow: 0 16px 30px rgba(2, 16, 11, 0.32);
+}
+
+.navbar.navbar-scrolled .nav-dropdown-item {
+  color: #f8fafc;
+}
+
+.navbar.navbar-scrolled .nav-dropdown-item:hover {
+  background: rgba(248, 250, 252, 0.14);
+  color: #facc15;
+}
+
 .nav-right {
-  flex: 1;
   display: flex;
   justify-content: flex-end;
+}
+
+.section-nav {
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 950;
+  display: grid;
+  gap: 10px;
   align-items: center;
 }
 
-.nav-actions {
-  display: flex;
-  gap: 12px;
+.section-nav-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.78;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.section-nav-btn:hover {
+  opacity: 1;
+}
+
+.section-nav-btn:focus-visible {
+  outline: 3px solid rgba(34, 197, 94, 0.24);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+.section-nav-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.28);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.14);
+  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.section-nav-label {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.14);
+  backdrop-filter: blur(8px);
+  transform: translateX(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.section-nav-btn:hover .section-nav-label,
+.section-nav-btn.active .section-nav-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.section-nav-btn.active .section-nav-dot {
+  background: #16a34a;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.18), 0 12px 24px rgba(15, 79, 37, 0.2);
+  transform: scale(1.18);
+}
+
+.section-nav-btn.active .section-nav-label {
+  color: #0f4f25;
+  border-color: rgba(22, 163, 74, 0.28);
+}
+
+.sign-in-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #111827;
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: #ffffff;
+  color: #111827;
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition:
+    background-color 0.24s ease,
+    border-color 0.24s ease,
+    color 0.24s ease,
+    transform 0.2s ease;
+}
+
+.sign-in-btn:hover {
+  background: #f3f4f6;
+  transform: translateY(-1px);
+}
+
+.sign-in-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.navbar.navbar-scrolled .sign-in-btn {
+  border-color: rgba(248, 250, 252, 0.82);
+  background: transparent;
+  color: #f8fafc;
+}
+
+.navbar.navbar-scrolled .sign-in-btn:hover {
+  background: rgba(248, 250, 252, 0.16);
 }
 
 .btn {
@@ -680,180 +1154,356 @@ h1, h2, h3, h4, h5, h6{
   transition: all 0.3s ease;
   text-align: center;
   white-space: nowrap;
-  position: relative;
-  z-index: 1101;
-  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.btn-find {
-  background: #38bdf8;
-  
-  color: #0f172a;
-  border: 1px solid #38bdf8;
-  box-shadow: 0 10px 24px rgba(56, 189, 248, 0.35);
-}
-
-.btn-find:hover {
-  background: #0ea5e9;
-  transform: translateY(-2px);
-}
-
-.btn-login {
-  background:#0f172a;
-  color: #ffffff;
-  border: 1px solid #0f172a;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
-}
-
-.btn-login:hover {
-  background: #1e293b;
-  border-color: #1e293b;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35);
-}
-
-.navbar.scrolled .btn-login{
-  background:#38bdf8;
-  color:#0f172a;
-  border-color:#38bdf8;
-}
-
-.navbar.scrolled .btn-login:hover{
-  background:#0ea5e9;
-  border-color:#0ea5e9;
-  color:#0f172a;
-}
-
-/* TRANSITIONS */
-.dropdown-slide-enter-active, .dropdown-slide-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-.dropdown-slide-enter-from, .dropdown-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(10px);
-}
-
-/* RESPONSIVE TOGGLE */
-.mobile-toggle {
-  display: none;
-  flex-direction: column;
-  gap: 6px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  margin-left: 15px;
-}
-
-.mobile-toggle span {
-  width: 26px;
-  height: 2px;
-  background: #0f172a;
-  border-radius: 2px;
-}
-
-.navbar.scrolled .mobile-toggle span {
-  background:#ffffff;
-}
-
-/* MEDIA QUERIES */
-@media (max-width: 1024px) {
-  .nav-center {
-    display: none; /* Hide for mobile menu logic */
-  }
-  .mobile-toggle {
-    display: flex;
-  }
-}
-
-@media (max-width: 640px) {
-  .btn-login {
-    display: inline-flex;
-    min-width: 110px;
-    padding: 10px 14px;
-  }
-  .navbar {
-    padding: 0 20px;
-    height: 70px;
-  }
-  .logo {
-    height: 35px;
-  }
-}
 /* HERO */
-.hero{
-  min-height:100vh;
+.hero {
+  min-height: 520px;
+  padding: 130px 6% 72px;
   background:
-    linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.65) 100%),
+    linear-gradient(180deg, rgba(10, 27, 20, 0.78) 0%, rgba(10, 27, 20, 0.58) 45%, rgba(10, 27, 20, 0.88) 100%),
     url("@/assets/bg.jpg");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-attachment: fixed;
-  display:flex;
-  justify-content:center;
+  display: flex;
+  align-items: center;
+  will-change: background-position;
   position: relative;
-  align-items:center;
-  text-align:center;
+  overflow: hidden;
+  isolation: isolate;
 }
 
-.hero::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0.7) 100%);
-  pointer-events:none;
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: -20% -10%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(244, 196, 31, 0.18) 0%, rgba(244, 196, 31, 0) 55%),
+    radial-gradient(circle at 70% 70%, rgba(44, 185, 176, 0.14) 0%, rgba(44, 185, 176, 0) 58%);
+  opacity: 0;
+  transform: scale(1.05);
+  pointer-events: none;
+  z-index: 0;
 }
 
-.hero-content{
-  position:relative;
-  z-index:1;
+.hero-shell {
+  width: 100%;
+  max-width: 1220px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  align-items: center;
+  gap: 30px;
+  position: relative;
+  z-index: 1;
 }
 
-.hero-content{
-  max-width:900px;
-  padding:0 20px;
-  text-align: center;
+.page:not(.page-ready) .hero-content h1,
+.page:not(.page-ready) .hero-desc,
+.page:not(.page-ready) .hero-search,
+.page:not(.page-ready) .hero-seal {
+  opacity: 0;
+  transform: translateY(14px);
 }
 
-.hero-content h1{
-  font-size:50px;
-  color:#f8fafc;
-  margin-bottom:20px;
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
 
-.hero-desc{
-  font-size:18px;
-  color:#e2e8f0;
-  line-height:1.6;
+@keyframes hero-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.hero-actions{
-  margin-top:24px;
-  display:flex;
-  justify-content:center;
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
-.hero-btn{
-  
-  border-radius:999px;
-  font-size:0.85rem;
-  font-weight:700;
-  text-decoration:none;
-  transition:all 0.25s ease;
-  min-width:px;
-  text-align:center;
-  white-space:nowrap;
+@keyframes hero-glow {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.hero-btn.primary{
-  background:#38bdf8;
-  color:#0f172a;
-  box-shadow:0 10px 24px rgba(56, 189, 248, 0.35);
+.page.page-ready .hero::after {
+  animation: hero-glow 1.05s ease both 0.12s;
 }
 
-.hero-btn.primary:hover{
-  background:#0ea5e9;
-  transform:translateY(-2px);
+.page.page-ready .hero-content h1 {
+  will-change: transform, opacity, filter;
+  animation: hero-rise 0.85s cubic-bezier(0.2, 0.9, 0.2, 1) both 0.18s;
+}
+
+.page.page-ready .hero-desc {
+  will-change: transform, opacity, filter;
+  animation: hero-rise 0.85s cubic-bezier(0.2, 0.9, 0.2, 1) both 0.3s;
+}
+
+.page.page-ready .hero-search {
+  will-change: transform, opacity;
+  animation: hero-pop 0.95s cubic-bezier(0.2, 0.9, 0.2, 1) both 0.42s;
+}
+
+.page.page-ready .hero-seal {
+  will-change: transform, opacity, filter;
+  animation:
+    hero-rise 0.95s cubic-bezier(0.2, 0.9, 0.2, 1) both 0.26s,
+    hero-float 5.2s ease-in-out infinite 1.35s;
+}
+
+.page.page-ready .hero-search .search-submit {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.page.page-ready .hero-search .search-submit:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page:not(.page-ready) .hero-content h1,
+  .page:not(.page-ready) .hero-desc,
+  .page:not(.page-ready) .hero-search,
+  .page:not(.page-ready) .hero-seal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .page.page-ready .hero::after,
+  .page.page-ready .hero-content h1,
+  .page.page-ready .hero-desc,
+  .page.page-ready .hero-search,
+  .page.page-ready .hero-seal {
+    animation: none;
+  }
+}
+
+.hero-content {
+  max-width: 680px;
+  text-align: left;
+}
+
+.hero-content h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3.6vw, 3rem);
+  line-height: 1.12;
+  color: #f8fafc;
+}
+
+.hero-desc {
+  margin-top: 16px;
+  font-size: clamp(0.95rem, 1.4vw, 1.05rem);
+  color: #facc15;
+  font-weight: 700;
+  max-width: 560px;
+}
+
+.hero-search {
+  margin-top: 20px;
+  max-width: 760px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-right: 1px solid #e5e7eb;
+  min-width: 0;
+}
+
+.search-field:last-child {
+  border-right: 0;
+}
+
+.search-field > svg {
+  width: 14px;
+  height: 14px;
+  color: #6b7280;
+  flex: 0 0 auto;
+}
+
+.search-field input,
+.search-field select {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #0f172a;
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.search-field input::placeholder {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.search-field select {
+  padding-right: 18px;
+  appearance: none;
+  cursor: pointer;
+  color: #374151;
+}
+
+.search-field-select .search-caret {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 13px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.search-submit {
+  border: 0;
+  background: #0f4f25;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0 18px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 36px;
+  align-self: center;
+}
+
+.search-submit:hover {
+  background: #0b3d1d;
+}
+
+.hero-logo-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.hero-seal {
+  width: min(370px, 100%);
+  height: auto;
+  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.38));
+}
+
+@media (max-width: 980px) {
+  .navbar {
+    height: 78px;
+    padding: 0 14px;
+  }
+
+  .logo {
+    height: 56px;
+  }
+
+  .nav-center {
+    display: none;
+  }
+
+  .section-nav {
+    display: none;
+  }
+
+  .hero {
+    padding: 110px 6% 60px;
+  }
+
+  .hero-shell {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .hero-content {
+    max-width: none;
+    text-align: center;
+  }
+
+  .hero-desc {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-search {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-seal {
+    width: min(300px, 72vw);
+  }
+}
+
+@media (max-width: 720px) {
+  .sign-in-btn {
+    padding: 8px 10px;
+    font-size: 0.72rem;
+  }
+
+  .sign-in-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .hero-search {
+    border-radius: 18px;
+    grid-template-columns: 1fr;
+    max-width: 390px;
+  }
+
+  .search-field {
+    border-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+    justify-content: flex-start;
+    padding: 11px 12px;
+  }
+
+  .search-field:last-child {
+    border-bottom: 0;
+  }
+
+  .search-submit {
+    margin-top: 8px;
+    width: 100%;
+    border-radius: 10px;
+    min-height: 38px;
+  }
 }
 
 /* SECTIONS */
@@ -861,6 +1511,15 @@ h1, h2, h3, h4, h5, h6{
   padding:140px 20px;
   background:white;
   text-align:center;
+}
+
+#about,
+#tutorial,
+#privacy,
+#contact,
+#mission,
+#vision {
+  scroll-margin-top: 108px;
 }
 
 /* About section border */
@@ -940,6 +1599,24 @@ h2{
   line-height:1.7;
 }
 
+.about-focus-card {
+  margin-top: 6px;
+  border: 1px solid #dbe4f1;
+  background: #f8fbff;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.about-focus-card h4 {
+  margin: 0;
+  color: #0f4f25;
+  font-size: 1rem;
+}
+
+.about-focus-card p {
+  margin-top: 6px;
+}
+
 @media (max-width: 900px){
   .about-panel{
     grid-template-columns:1fr;
@@ -1000,192 +1677,205 @@ h2{
   transform:translateY(-5px);
 }
 
-/* Main Layout & Dark Theme */
+/* FOOTER */
 .footer {
-  background: linear-gradient(165deg, #0a0c12 0%, #161b2a 100%);
-  color: #e2e8f0;
-  padding: 100px 5% 40px;
-  font-family: 'Inter', -apple-system, sans-serif;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, #0b4c23 0%, #093c1d 58%, #072f18 100%);
+  color: #dce8da;
+  padding: 34px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .footer-container {
-  max-width: 1280px;
+  max-width: 1180px;
   margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  gap: 80px;
+  padding: 0 5%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(340px, 500px);
+  gap: 56px;
+  align-items: start;
 }
 
-/* Brand & Logo Section */
 .footer-brand {
-  flex: 0 1 400px;
-}
-
-.logo-wrapper {
+  max-width: 470px;
   display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 25px;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
-.logo-icon {
-  width: 42px;
-  height: 42px;
-  background: #3b82f6;
-  color: #fff;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-}
-
-.logo-type {
-  font-size: 1.6rem;
-  font-weight: 800;
-  letter-spacing: -1px;
-  color: #fff;
-  margin: 0;
-}
-
-.logo-type span {
-  color: #3b82f6;
+.footer-logo {
+  width: auto;
+  height: clamp(78px, 8vw, 102px);
+  max-width: 100%;
+  display: block;
+  margin-bottom: 12px;
 }
 
 .brand-text {
-  color: #94a3b8;
-  line-height: 1.8;
-  font-size: 0.95rem;
-  margin-bottom: 30px;
+  margin: 0;
+  max-width: 430px;
+  color: rgba(227, 237, 224, 0.95);
+  font-size: 0.8rem;
+  line-height: 1.58;
 }
 
-/* Link Columns */
-.footer-nav {
+.social-wrapper {
   display: flex;
-  flex: 1;
-  justify-content: space-between;
-  gap: 40px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
 }
 
-.nav-group h3 {
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 25px;
+.social-link {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: #e0b118;
+  color: #083b1c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c99904;
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
-.nav-group ul {
+.social-link svg {
+  width: 12px;
+  height: 12px;
+}
+
+.social-link:hover {
+  background: #e9bc24;
+  transform: translateY(-1px);
+}
+
+.footer-nav {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(145px, 180px);
+  gap: 34px;
+  align-content: start;
+  align-items: start;
+}
+
+.footer .nav-group h3 {
+  margin: 0 0 10px;
+  color: #f4c41f;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+}
+
+.footer .nav-group p {
+  margin: 0;
+  color: rgba(227, 237, 224, 0.95);
+  font-size: 0.8rem;
+  line-height: 1.52;
+}
+
+.footer .nav-group ul {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.nav-group li {
-  margin-bottom: 15px;
+.footer .nav-group li + li {
+  margin-top: 10px;
 }
 
-.nav-group a {
+.footer .nav-group a {
   text-decoration: none;
-  color: #94a3b8;
-  font-size: 0.9rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #f4c41f;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: opacity 0.2s ease;
 }
 
-.nav-group a:hover {
-  color: #3b82f6;
-  padding-left: 8px;
+.footer .nav-group a:hover {
+  opacity: 0.85;
 }
 
-/* Social Media Section */
-.social-wrapper {
-  display: flex;
-  gap: 12px;
+.footer .about-group p {
+  max-width: 300px;
 }
 
-.social-link {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.03);
-  color: #94a3b8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.4s ease;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.social-link svg {
-  width: 18px;
-  height: 18px;
-}
-
-.social-link:hover {
-  background: #3b82f6;
-  color: #fff;
-  transform: translateY(-5px);
-  border-color: #3b82f6;
-}
-
-/* Bottom Copyright Bar */
-.footer-bottom {
-  margin-top: 80px;
-  padding-top: 30px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.bottom-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #64748b;
-  font-size: 0.85rem;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
+.footer .services-group ul {
+  display: grid;
   gap: 8px;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  background: #10b981;
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+.footer .services-group li + li {
+  margin-top: 0;
 }
 
-/* Responsive Design */
-@media (max-width: 1024px) {
+.footer-bottom {
+  margin-top: 16px;
+  width: 100%;
+  background: #e0af08;
+  border-top: 1px solid #cb9900;
+}
+
+.bottom-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 5px 5%;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.bottom-inner p {
+  margin: 0;
+  color: #0a3417;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04px;
+}
+
+@media (max-width: 980px) {
   .footer-container {
-    flex-direction: column;
-    gap: 60px;
+    grid-template-columns: 1fr;
+    gap: 26px;
   }
-  .footer-brand {
-    max-width: 100%;
-    text-align: center;
+
+  .footer-nav {
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 180px);
+    gap: 24px;
   }
-  .logo-wrapper, .social-wrapper {
-    justify-content: center;
+
+  .footer .about-group p {
+    max-width: none;
   }
 }
 
 @media (max-width: 640px) {
-  .footer-nav {
-    flex-direction: column;
-    gap: 40px;
-    text-align: center;
+  .footer {
+    padding: 28px 0 0;
   }
-  .bottom-inner {
-    flex-direction: column;
-    gap: 15px;
-    text-align: center;
+
+  .footer-logo {
+    height: 72px;
+    width: auto;
+  }
+
+  .brand-text,
+  .footer .nav-group p,
+  .footer .nav-group a {
+    font-size: 0.76rem;
+  }
+
+  .footer .nav-group h3 {
+    font-size: 0.82rem;
+  }
+
+  .footer-nav {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .bottom-inner p {
+    font-size: 0.58rem;
+    line-height: 1.35;
   }
 }
 
@@ -1272,6 +1962,11 @@ h2{
     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
+.tutorial-video-blank{
+  background:#ffffff;
+  box-shadow:none;
+}
+
 .tutorial-pane{
   padding:26px 24px;
   display:flex;
@@ -1347,105 +2042,144 @@ h2{
 }
 
 .faq-section{
-  padding:140px 200px;
-  background:#fff;
-
+  padding:86px 6% 66px;
+  background:#ffffff;
+  border-top:1px solid #e5e7eb;
 }
+
+.faq-shell{
+  max-width:1080px;
+  margin:0 auto;
+}
+
 .faq-header{
   text-align:center;
-  margin-bottom:50px;
+  margin-bottom:26px;
 }
 
 .faq-badge{
-  background:#e8f0ff;
-  color:#0d6efd;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   padding:6px 14px;
-  border-radius:20px;
-  font-size:13px;
+  border-radius:999px;
+  font-size:0.72rem;
+  font-weight:700;
+}
+
+.faq-section .faq-badge{
+  background:#e1b31a;
+  color:#103a1b;
+  border:1px solid #c69500;
 }
 
 .faq-header h2{
-  font-size:42px;
-  margin:20px 0 10px;
+  margin:14px 0 6px;
+  font-size:clamp(2rem, 4vw, 3rem);
+  line-height:1.1;
+  color:#0f4f25;
 }
 
 .faq-header p{
-  color:#555;
+  margin:0;
+  color:#475569;
+  font-size:1.02rem;
+  font-weight:600;
 }
-
-/* FAQ LIST */
 
 .faq-list{
-  max-width:800px;
-  margin:auto;
+  max-width:950px;
+  margin:0 auto;
+  display:grid;
+  gap:10px;
 }
 
+.faq-item{
+  overflow:hidden;
+}
 
 .faq-question{
-  padding:22px;
-  font-weight:600;
+  width:100%;
+  padding:14px 18px;
+  background:#e0b118;
+  border:1px solid #bf9000;
+  border-radius:10px;
+  color:#122815;
+  font-size:0.94rem;
+  font-weight:700;
+  text-align:left;
   cursor:pointer;
   display:flex;
   justify-content:space-between;
   align-items:center;
-
-  border:1px solid #e5e7eb;     /* ✅ BORDER */
-  border-radius:8px;            /* ✅ ROUNDED CORNER */
-
-  transition:
-    background-color .15s ease,
-    border-color .15s ease;
+  transition:background-color .16s ease;
 }
 
 .faq-question:hover{
-  background:#f8fafc;
-  border-color:#c7d2fe;         /* subtle hover */
+  background:#e8bc25;
 }
 
-/* ARROW */
 .arrow{
-  transition:transform .2s ease;
+  width:15px;
+  height:15px;
+  color:#1d5c21;
+  flex:0 0 auto;
+  transition:transform .22s ease;
 }
 
 .arrow.open{
   transform:rotate(180deg);
 }
 
-/* ANSWER */
 .faq-answer{
-  padding:12px 22px 22px;
-  color:#555;
+  margin-top:4px;
+  padding:13px 18px 18px;
+  border:1px solid #d1d5db;
+  border-top:0;
+  border-radius:0 0 10px 10px;
+  background:#f8fafc;
+  color:#111827;
+  line-height:1.6;
 }
 
-/* This ensures the FAQ item doesn't collapse the layout instantly */
-.faq-item {
-  overflow: hidden;
-  backface-visibility: hidden; /* Helps with GPU rendering lag */
-}
-
-/* The transition configuration */
 .faq-slide-enter-active,
 .faq-slide-leave-active {
-  transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.4s ease;
-  max-height: 500px; /* Set higher than your tallest answer */
+  transition:max-height 0.35s ease, opacity 0.26s ease, padding 0.35s ease;
+  max-height:300px;
 }
 
-/* The 'Closed' state */
 .faq-slide-enter-from,
 .faq-slide-leave-to {
-  max-height: 0 !important;
-  opacity: 0;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  margin: 0 !important;
+  max-height:0 !important;
+  opacity:0;
+  padding-top:0 !important;
+  padding-bottom:0 !important;
+  margin:0 !important;
 }
 
-/* Prevent Footer lag by isolating the section */
-.faq-section {
-  contain: content; /* Tells the browser this section's changes don't affect global layout */
-  min-height: 400px; /* Optional: keeps the section from shrinking too much */
-}
+@media (max-width: 768px){
+  .faq-section{
+    padding:70px 5% 56px;
+  }
 
+  .faq-header h2{
+    font-size:clamp(1.62rem, 7vw, 2.2rem);
+  }
+
+  .faq-header p{
+    font-size:0.9rem;
+  }
+
+  .faq-question{
+    font-size:0.82rem;
+    padding:12px 14px;
+  }
+
+  .faq-answer{
+    font-size:0.86rem;
+    padding:12px 14px 15px;
+  }
+}
 /* ================= MAINTENANCE OVERLAY ================= */
 
 .maintenance-overlay {

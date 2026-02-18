@@ -23,7 +23,7 @@
             class="logo-img"
           />
           <div v-else class="logo-fallback">
-            {{ (job.company || job.department || "CO").slice(0,2).toUpperCase() }}
+            {{ (job.companyName || job.company || job.department || "CO").slice(0,2).toUpperCase() }}
           </div>
         </div>
 
@@ -33,6 +33,7 @@
             <span class="type-badge">{{ job.type || "Open" }}</span>
           </div>
 
+          <p class="company-line">{{ job.companyName || "Company" }}</p>
           <p class="dept">{{ job.description || "-" }}</p>
 
           <div class="meta">
@@ -73,12 +74,12 @@
                     alt="Company logo"
                   />
                   <div v-else class="company-logo-fallback">
-                    {{ (selectedJob.company || selectedJob.department || "CO").slice(0,2).toUpperCase() }}
+                    {{ (selectedJob.companyName || selectedJob.company || selectedJob.department || "CO").slice(0,2).toUpperCase() }}
                   </div>
                 </div>
                 <div class="company-text">
                   <p class="company-name">
-                    {{ selectedJob.company || selectedJob.department || "Company" }}
+                    {{ selectedJob.companyName || selectedJob.company || selectedJob.department || "Company" }}
                   </p>
                   <h2>{{ selectedJob.title }}</h2>
                 </div>
@@ -219,6 +220,14 @@ onMounted(() => {
 
         return {
           ...job,
+          companyName:
+            String(
+              job.companyName ||
+              job.company_name ||
+              job.company ||
+              job.department ||
+              ""
+            ).trim(),
           imageUrl:
             job.imageUrl ||
             job.imageURL ||
@@ -430,6 +439,13 @@ const applyJob = async () => {
   margin:6px 0 8px;
   color:#6b7280;
   font-size:13px;
+}
+
+.company-line{
+  margin:6px 0 4px;
+  color:#1f2937;
+  font-size:12px;
+  font-weight:700;
 }
 
 .meta{

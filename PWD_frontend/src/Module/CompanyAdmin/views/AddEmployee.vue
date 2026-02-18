@@ -265,7 +265,7 @@ const filteredEmployees = computed(() => {
   const term = search.value.trim().toLowerCase()
 
   return employees.value.filter((employee) => {
-    const role = String(employee.role || "").toLowerCase()
+    const role = normalizeRole(employee.role)
     const roleOk = roleFilter.value === "all" || role === roleFilter.value
     const textOk =
       !term ||
@@ -275,9 +275,9 @@ const filteredEmployees = computed(() => {
   })
 })
 
-const hrCount = computed(() => employees.value.filter((x) => String(x.role || "").toLowerCase() === "hr").length)
-const financeCount = computed(() => employees.value.filter((x) => String(x.role || "").toLowerCase() === "finance").length)
-const operationCount = computed(() => employees.value.filter((x) => String(x.role || "").toLowerCase() === "operation").length)
+const hrCount = computed(() => employees.value.filter((x) => normalizeRole(x.role) === "hr").length)
+const financeCount = computed(() => employees.value.filter((x) => normalizeRole(x.role) === "finance").length)
+const operationCount = computed(() => employees.value.filter((x) => normalizeRole(x.role) === "operation").length)
 
 onMounted(async () => {
   await bootstrapCompanyScope()
@@ -338,7 +338,11 @@ async function bootstrapCompanyScope() {
   stopSync.value = onSnapshot(q, (snapshot) => {
     employees.value = snapshot.docs
       .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-      .filter((user) => ["hr", "finance", "operation"].includes(normalizeRole(user.role)))
+      .map((user) => ({
+        ...user,
+        role: normalizeRole(user.role),
+      }))
+      .filter((user) => ["hr", "finance", "operation"].includes(user.role))
       .sort((a, b) => formatRoleLabel(a.role).localeCompare(formatRoleLabel(b.role)))
   })
 }
@@ -455,7 +459,9 @@ function normalizeRole(role) {
   if (value === "hr" || value === "hr department") return "hr"
   if (value === "operation" || value === "operation department") return "operation"
   if (value === "finance" || value === "financial" || value === "financial department") return "finance"
-  return "hr"
+  if (value === "company admin") return "company_admin"
+  if (value === "admin") return "admin"
+  return ""
 }
 
 function formatRoleLabel(role) {
@@ -463,7 +469,10 @@ function formatRoleLabel(role) {
   if (normalized === "hr") return "HR DEPARTMENT"
   if (normalized === "operation") return "OPERATION DEPARTMENT"
   if (normalized === "finance") return "FINANCIAL DEPARTMENT"
-  return "HR DEPARTMENT"
+  if (normalized === "company_admin") return "COMPANY ADMIN"
+  if (normalized === "admin") return "ADMIN"
+  const fallback = String(role || "").trim()
+  return fallback ? fallback.toUpperCase() : "UNKNOWN ROLE"
 }
 
 function normalizeStatus(status) {

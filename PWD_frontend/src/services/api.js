@@ -14,6 +14,37 @@ function buildUrl(path, params) {
   return url.toString()
 }
 
+function parseJsonLoose(text) {
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    // Some PHP warnings can prepend/append noise to JSON.
+    const firstObjectStart = text.indexOf("{")
+    const lastObjectEnd = text.lastIndexOf("}")
+    if (firstObjectStart >= 0 && lastObjectEnd > firstObjectStart) {
+      try {
+        return JSON.parse(text.slice(firstObjectStart, lastObjectEnd + 1))
+      } catch {
+        // continue
+      }
+    }
+
+    const firstArrayStart = text.indexOf("[")
+    const lastArrayEnd = text.lastIndexOf("]")
+    if (firstArrayStart >= 0 && lastArrayEnd > firstArrayStart) {
+      try {
+        return JSON.parse(text.slice(firstArrayStart, lastArrayEnd + 1))
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  return null
+}
+
 async function request(method, path, data, options = {}) {
   const { headers = {}, params, onUploadProgress } = options
   const url = buildUrl(path, params)
@@ -44,25 +75,20 @@ async function request(method, path, data, options = {}) {
   })
 
   const text = await response.text()
-  let json = null
-  try {
-    json = text ? JSON.parse(text) : null
-  } catch {
-    json = null
-  }
+  const json = parseJsonLoose(text)
 
   if (!response.ok) {
     const error = new Error(json?.message || `Request failed with status ${response.status}`)
     error.response = {
       status: response.status,
-      data: json,
+      data: json ?? text ?? null,
     }
     throw error
   }
 
   return {
     status: response.status,
-    data: json,
+    data: json ?? text ?? null,
   }
 }
 

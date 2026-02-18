@@ -277,7 +277,8 @@
 <script>
 import { auth, db } from "@/lib/client-platform"
 import api from "@/services/api"
-import { toast } from "vue3-toastify"
+import Toastify from "toastify-js"
+import "toastify-js/src/toastify.css"
 import { onAuthStateChanged } from "@/lib/session-auth"
 import {
   collection,
@@ -291,6 +292,21 @@ import {
   writeBatch,
   serverTimestamp
 } from "@/lib/laravel-data"
+
+const toast = {
+  success(text) {
+    Toastify({ text, backgroundColor: "#16a34a" }).showToast()
+  },
+  error(text) {
+    Toastify({ text, backgroundColor: "#dc2626" }).showToast()
+  },
+  warning(text) {
+    Toastify({ text, backgroundColor: "#f59e0b" }).showToast()
+  },
+  info(text) {
+    Toastify({ text, backgroundColor: "#2563eb" }).showToast()
+  },
+}
 
 export default {
   name: "JobListings",
@@ -560,7 +576,191 @@ export default {
       const form = new FormData()
       form.append("image", file)
       const res = await api.post("/uploads", form)
-      return res.data?.url || ""
+      const payload = this.normalizeUploadResponse(res?.data)
+      const url = String(payload?.url || "").trim()
+      if (url) return url
+
+      const path = String(payload?.path || "").trim()
+      if (path) return this.buildUploadUrlFromPath(path)
+
+      throw new Error("Upload response missing image URL.")
+    },
+
+    isLikelyPath(value) {
+      const text = String(value || "").trim().replace(/\\+/g, "/")
+      if (!text) return false
+      if (/^https?:\/\//i.test(text)) return false
+      return /^\/?(uploads|storage)\//i.test(text) || /\/uploads\//i.test(text)
+    },
+
+    normalizePathString(value) {
+      const text = String(value || "").trim().replace(/\\+/g, "/")
+      if (!text) return ""
+
+      const withoutQuery = text.split("?")[0].split("#")[0]
+
+      if (/^https?:\/\//i.test(withoutQuery)) {
+        try {
+          const url = new URL(withoutQuery)
+          const marker = "/uploads/"
+          const idx = url.pathname.toLowerCase().indexOf(marker)
+          if (idx >= 0) {
+            const tail = url.pathname.slice(idx + marker.length).replace(/^\/+/, "")
+            if (!tail) return ""
+            return /^uploads\//i.test(tail) ? tail : `uploads/${tail}`
+          }
+        } catch {
+          return ""
+        }
+      }
+
+      const marker = "/uploads/"
+      const lower = withoutQuery.toLowerCase()
+      const markerIdx = lower.indexOf(marker)
+      if (markerIdx >= 0) {
+        const tail = withoutQuery.slice(markerIdx + marker.length).replace(/^\/+/, "")
+        if (!tail) return ""
+        return /^uploads\//i.test(tail) ? tail : `uploads/${tail}`
+      }
+
+      return withoutQuery.replace(/^\/+/, "")
+    },
+
+    pickFirstStringByKeys(source, keys) {
+      if (!source || typeof source !== "object") return ""
+      for (const key of keys) {
+        const value = source[key]
+        if (typeof value === "string" && value.trim()) {
+          return value.trim()
+        }
+      }
+      return ""
+    },
+
+    findFirstStringDeep(value, predicate, depth = 0) {
+      if (depth > 4 || value == null) return ""
+      if (typeof value === "string" && predicate(value)) return value.trim()
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const found = this.findFirstStringDeep(item, predicate, depth + 1)
+          if (found) return found
+        }
+        return ""
+      }
+      if (typeof value === "object") {
+        for (const nested of Object.values(value)) {
+          const found = this.findFirstStringDeep(nested, predicate, depth + 1)
+          if (found) return found
+        }
+      }
+      return ""
+    },
+
+    normalizeUploadResponse(raw) {
+      let payload = raw
+
+      if (typeof payload === "string") {
+        const text = payload.trim()
+        try {
+          payload = JSON.parse(text)
+        } catch {
+          const objectStart = text.indexOf("{")
+          const objectEnd = text.lastIndexOf("}")
+          if (objectStart >= 0 && objectEnd > objectStart) {
+            try {
+              payload = JSON.parse(text.slice(objectStart, objectEnd + 1))
+            } catch {
+              payload = text
+            }
+          } else {
+            payload = text
+          }
+        }
+      }
+
+      if (Array.isArray(payload)) {
+        payload = payload[0] ?? {}
+      }
+
+      if (payload && typeof payload === "object") {
+        if (payload.data != null) {
+          payload = payload.data
+        } else if (payload.result != null) {
+          payload = payload.result
+        } else if (payload.upload != null) {
+          payload = payload.upload
+        }
+      }
+
+      if (Array.isArray(payload)) {
+        payload = payload[0] ?? {}
+      }
+
+      if (typeof payload === "string") {
+        const normalized = payload.replace(/\\\//g, "/")
+        const urlMatch = normalized.match(/https?:\/\/[^\s"'<>()]+/i)
+        const normalizedPath = this.normalizePathString(normalized)
+        return {
+          url: urlMatch ? urlMatch[0] : "",
+          path: this.isLikelyPath(normalizedPath) ? normalizedPath : "",
+        }
+      }
+
+      const explicitUrl = this.pickFirstStringByKeys(payload, [
+        "url",
+        "downloadUrl",
+        "downloadURL",
+        "secure_url",
+        "fileUrl",
+        "fileURL",
+        "image_url",
+        "imageUrl",
+        "photo_url",
+        "photoUrl",
+        "src",
+        "location",
+      ])
+
+      const explicitPath = this.pickFirstStringByKeys(payload, [
+        "path",
+        "filePath",
+        "filepath",
+        "image_path",
+        "imagePath",
+        "photo_path",
+        "photoPath",
+      ])
+
+      const deepUrl = this.findFirstStringDeep(payload, (text) => /https?:\/\//i.test(String(text)))
+      const deepPath = this.findFirstStringDeep(payload, (text) => this.isLikelyPath(text))
+
+      const url = explicitUrl || deepUrl
+      const normalizedPath = this.normalizePathString(explicitPath || deepPath)
+
+      return {
+        url: String(url || "").trim(),
+        path: this.isLikelyPath(normalizedPath) ? normalizedPath : "",
+      }
+    },
+
+    getApiOrigin() {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api"
+      try {
+        return new URL(apiBase).origin
+      } catch {
+        return window.location.origin
+      }
+    },
+
+    buildUploadUrlFromPath(path) {
+      const cleaned = String(path || "").replace(/^\/+/, "").replace(/\\/g, "/")
+      if (!cleaned) return ""
+      const encodedPath = cleaned
+        .split("/")
+        .filter(Boolean)
+        .map((segment) => encodeURIComponent(segment))
+        .join("/")
+      return `${this.getApiOrigin()}/api/uploads/${encodedPath}`
     },
 
     getMapUrl(location) {
@@ -570,33 +770,40 @@ export default {
 
     async updateJob() {
       try {
-        const uploadWarnings = []
+        let uploadFailed = false
 
         if (this.editImageFile1) {
           try {
             const url = await this.uploadImage(this.editImageFile1)
-            if (url) {
-              this.editJobData.imageUrl = url
-            } else {
-              uploadWarnings.push("Photo 1 upload returned empty URL. Keeping old photo.")
-            }
+            this.editJobData.imageUrl = url
           } catch (uploadErr) {
             console.error("Photo 1 upload failed:", uploadErr)
-            uploadWarnings.push("Photo 1 upload failed. Keeping old photo.")
+            toast.warning(uploadErr?.message || "Photo 1 upload failed.")
+            uploadFailed = true
           }
         }
         if (this.editImageFile2) {
           try {
             const url = await this.uploadImage(this.editImageFile2)
-            if (url) {
-              this.editJobData.imageUrl2 = url
-            } else {
-              uploadWarnings.push("Photo 2 upload returned empty URL. Keeping old photo.")
-            }
+            this.editJobData.imageUrl2 = url
           } catch (uploadErr) {
             console.error("Photo 2 upload failed:", uploadErr)
-            uploadWarnings.push("Photo 2 upload failed. Keeping old photo.")
+            toast.warning(uploadErr?.message || "Photo 2 upload failed.")
+            uploadFailed = true
           }
+        }
+        if (uploadFailed) {
+          toast.error("Job update cancelled. Please re-upload failed photo(s).")
+          return
+        }
+        if (
+          this.editImageFile1 &&
+          this.editImageFile2 &&
+          this.editJobData.imageUrl &&
+          this.editJobData.imageUrl === this.editJobData.imageUrl2
+        ) {
+          toast.error("Photo 1 and Photo 2 are the same URL. Please upload two different photos.")
+          return
         }
 
         await updateDoc(doc(db, "jobs", this.editJobData.id), {
@@ -613,12 +820,7 @@ export default {
         this.showModal = false
         this.editImageFile1 = null
         this.editImageFile2 = null
-
-        if (uploadWarnings.length) {
-          toast.warning(uploadWarnings.join(" "))
-        } else {
-          toast.success("Job updated successfully")
-        }
+        toast.success("Job updated successfully")
       } catch (err) {
         console.error(err)
         const message =

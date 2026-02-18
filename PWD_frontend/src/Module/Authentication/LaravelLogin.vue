@@ -4,8 +4,8 @@
       <h1>Login</h1>
       <p class="subtitle">Sign in using your Laravel account.</p>
 
-      <label>Email</label>
-      <input v-model.trim="email" type="email" placeholder="you@example.com" />
+      <label>Email or Username</label>
+      <input v-model.trim="email" type="text" placeholder="you@example.com or your_username" />
 
       <label>Password</label>
       <input v-model="password" type="password" placeholder="Enter password" />
@@ -33,9 +33,18 @@ const email = ref("")
 const password = ref("")
 const loading = ref(false)
 
+function normalizeRole(value) {
+  const role = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
+  if (role === "hr_department") return "hr"
+  if (role === "operation_department") return "operation"
+  if (role === "financial_department" || role === "finance_department") return "finance"
+  if (role === "companyadmin") return "company_admin"
+  return role
+}
+
 const login = async () => {
   if (!email.value || !password.value) {
-    alert("Please enter email and password.")
+    alert("Please enter email/username and password.")
     return
   }
 
@@ -54,17 +63,30 @@ const login = async () => {
     localStorage.setItem("uid", String(user.id))
     localStorage.setItem("userName", user.username || user.name || "User")
     localStorage.setItem("userEmail", user.email || "")
-    localStorage.setItem("userRole", user.role || "")
+    localStorage.setItem("userRole", normalizeRole(user.role))
     localStorage.setItem("companyId", user.companyId || "")
     localStorage.setItem("companyName", user.companyName || "")
+    localStorage.setItem("userCollection", String(user.accountType || (String(user.role || "").toLowerCase() === "admin" ? "admins" : "users")))
 
-    auth.currentUser = { uid: String(user.id), email: user.email || "" }
+    auth.currentUser = {
+      uid: String(user.id),
+      email: user.email || "",
+      accountType: String(user.accountType || (String(user.role || "").toLowerCase() === "admin" ? "admins" : "users")),
+    }
 
-    const role = String(user.role || "").toLowerCase()
+    const role = normalizeRole(user.role)
     if (role === "admin") {
       router.replace("/admin/dashboard")
     } else if (role === "applicant") {
       router.replace("/applicant/job_list")
+    } else if (role === "company_admin") {
+      router.replace("/company-admin/dashboard")
+    } else if (role === "hr" || role === "employer") {
+      router.replace("/employer/HR/dashboard")
+    } else if (role === "operation") {
+      router.replace("/employer/operation/dashboard")
+    } else if (role === "finance") {
+      router.replace("/employer/finance/dashboard")
     } else {
       router.replace("/landingpage")
     }
