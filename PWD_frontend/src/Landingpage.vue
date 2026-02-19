@@ -75,9 +75,6 @@
             role="menu"
             aria-label="About Us menu"
           >
-            <button type="button" class="nav-dropdown-item" role="menuitem" @click="scrollTo('mission')">
-              Mission
-            </button>
             <button type="button" class="nav-dropdown-item" role="menuitem" @click="scrollTo('vision')">
               Vision
             </button>
@@ -98,23 +95,50 @@
         </svg>
         Sign In
       </router-link>
+      <button
+        type="button"
+        class="mobile-menu-btn"
+        :aria-expanded="isMobileMenuOpen"
+        aria-controls="mobile-nav-drawer"
+        aria-label="Open navigation menu"
+        @click="toggleMobileMenu"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
     </div>
   </div>
 </header>
 
-    <nav class="section-nav" aria-label="Page sections">
-      <button
-        v-for="item in sectionNavItems"
-        :key="item.id"
-        type="button"
-        class="section-nav-btn"
-        :class="{ active: activeSection === item.id }"
-        @click="scrollTo(item.id)"
+    <transition name="mobile-nav-fade">
+      <div
+        v-if="isMobileMenuOpen"
+        class="mobile-nav-overlay"
+        @click.self="closeMobileMenu"
       >
-        <span class="section-nav-dot" aria-hidden="true"></span>
-        <span class="section-nav-label">{{ item.label }}</span>
-      </button>
-    </nav>
+        <aside id="mobile-nav-drawer" class="mobile-nav-drawer" role="dialog" aria-label="Mobile Navigation">
+          <div class="mobile-nav-head">
+            <img :src="logoDefault" alt="HireAble logo" class="mobile-nav-logo" />
+            <button type="button" class="mobile-nav-close" aria-label="Close navigation menu" @click="closeMobileMenu">
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+
+          <nav class="mobile-nav-links">
+            <router-link to="/search-jobs" class="mobile-nav-link" @click="closeMobileMenu">Find Job</router-link>
+            <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('vision')">Vision</button>
+            <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('tutorial')">Read First</button>
+            <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('privacy')">Privacy</button>
+            <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('contact')">Contact Us</button>
+          </nav>
+
+          <router-link :to="{ path: '/login', query: { force: '1' } }" class="mobile-nav-signin" @click="closeMobileMenu">
+            Sign In
+          </router-link>
+        </aside>
+      </div>
+    </transition>
 
     <!-- HERO -->
     <section id="home" class="hero" :style="heroParallaxStyle">
@@ -199,17 +223,35 @@
     </section>
 
     <!-- ABOUT -->
-    <section id="about" class="section">
+    <section
+      id="about"
+      ref="aboutSection"
+      class="section"
+      :class="{ 'about-visible': isAboutVisible }"
+    >
       <div class="about-panel">
         <div class="about-image-wrap">
-          <img
-            :src="aboutImages[0]"
-            alt="About platform image"
-            class="about-single-image"
-          />
+          <div
+            class="about-slider"
+            aria-label="PWD worker highlights"
+            @mouseenter="stopAboutSlider"
+            @mouseleave="startAboutSlider"
+          >
+            <div class="about-frame">
+              <img
+                v-for="(img, index) in aboutImages"
+                :key="index"
+                :src="img.src"
+                :alt="img.alt"
+                class="about-single-image"
+                :class="aboutFrameClass(index)"
+              />
+            </div>
+          </div>
         </div>
 
-        <div class="about-copy"> 
+        <div class="about-copy">
+          <span class="about-badge">Who We Are</span>
           <h3>About Us</h3>
           <p>
             The Employment Assistance Platform for Persons with Disabilities is
@@ -231,28 +273,34 @@
             PWD talent, reducing hiring barriers, and creating a more connected
             local employment ecosystem.
           </p>
+          <div class="about-focus-grid">
+            <div id="mission" class="about-focus-card">
+              <h4>Mission</h4>
+              <p>
+                To empower Persons with Disabilities by connecting them to inclusive
+                employment opportunities through an accessible and data-guided platform.
+              </p>
+            </div>
 
-          <div id="mission" class="about-focus-card">
-            <h4>Mission</h4>
-            <p>
-              To empower Persons with Disabilities by connecting them to inclusive
-              employment opportunities through an accessible and data-guided platform.
-            </p>
-          </div>
-
-          <div id="vision" class="about-focus-card">
-            <h4>Vision</h4>
-            <p>
-              A community where every qualified PWD can access fair, meaningful,
-              and sustainable work opportunities without barriers.
-            </p>
+            <div id="vision" class="about-focus-card">
+              <h4>Vision</h4>
+              <p>
+                A community where every qualified PWD can access fair, meaningful,
+                and sustainable work opportunities without barriers.
+              </p>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- TUTORIAL -->
-    <section id="tutorial" ref="tutorialSection" class="tutorial-section">
+    <section
+      id="tutorial"
+      ref="tutorialSection"
+      class="tutorial-section"
+      :class="{ 'tutorial-visible': isTutorialVisible }"
+    >
       <div class="tutorial-card">
         <div class="video-pane">
           <div class="video-placeholder">
@@ -271,6 +319,7 @@
             v-for="(item, index) in tutorials"
             :key="item.q"
             class="tutorial-step"
+            @click="openTutorialVideo(index)"
           >
             <span class="step-dot">{{ index + 1 }}</span>
             <div>
@@ -281,6 +330,32 @@
         </div>
       </div>
     </section>
+
+    <transition name="tutorial-modal-fade">
+      <div
+        v-if="selectedTutorialIndex !== null"
+        class="tutorial-modal-overlay"
+        @click="closeTutorialVideo"
+      >
+        <button
+          type="button"
+          class="tutorial-modal-close"
+          @click="closeTutorialVideo"
+          aria-label="Close tutorial video"
+        >
+          &times;
+        </button>
+        <div class="tutorial-modal" @click.stop>
+          <iframe
+            class="tutorial-modal-video"
+            :src="selectedTutorialVideoSrc"
+            :title="tutorials[selectedTutorialIndex]?.q || 'Tutorial video'"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+        </div>
+      </div>
+    </transition>
 
     <!-- FAQ -->
     <!-- FAQ -->
@@ -369,6 +444,8 @@
 import proximityLogo from "@/assets/proximity.png";
 import heroSeal from "@/assets/logoproximity.png";
 import aboutPhoto from "@/assets/PWD_worker.png";
+import aboutPhoto2 from "@/assets/PWD_choose.png";
+import aboutPhoto3 from "@/assets/PWD_login.png";
 
 export default {
   name: "LandingPage",
@@ -381,9 +458,16 @@ export default {
       footerLogo: proximityLogo,
       showPageLoader: true,
       pageLoaderTimer: null,
+      aboutSlideTimer: null,
+      activeAboutSlide: 0,
+      aboutObserver: null,
+      isAboutVisible: false,
         maintenanceMode: true, // 🔥 toggle mo lang to false pag live na
       tutorialObserver: null,
       isTutorialInView: false,
+      isTutorialVisible: false,
+      selectedTutorialIndex: null,
+      isMobileMenuOpen: false,
       openDropdown: null,
       lastY: 0,
       hideNav: false,
@@ -394,7 +478,6 @@ export default {
       sectionNavItems: [
         { id: "home", label: "Home" },
         { id: "about", label: "About" },
-        { id: "mission", label: "Mission" },
         { id: "vision", label: "Vision" },
         { id: "tutorial", label: "Tutorial" },
         { id: "contact", label: "FAQs" },
@@ -501,7 +584,9 @@ export default {
         "Security and Safety"
       ],
       aboutImages: [
-        aboutPhoto
+        { src: aboutPhoto, alt: "PWD worker collaborating in an inclusive workspace" },
+        { src: aboutPhoto2, alt: "PWD job seeker onboarding and support scene" },
+        { src: aboutPhoto3, alt: "PWD applicant profile and employment readiness" }
       ],
 
 
@@ -577,7 +662,10 @@ mounted() {
   }, 850);
   window.addEventListener("scroll", this.onScroll, { passive: true });
   document.addEventListener("click", this.closeDropdown);
+  document.addEventListener("keydown", this.onGlobalKeydown);
   this.onScroll();
+  this.startAboutSlider();
+  this.setupAboutObserver();
   this.setupTutorialObserver();
 },
 beforeUnmount() {
@@ -585,15 +673,19 @@ beforeUnmount() {
     window.clearTimeout(this.pageLoaderTimer);
     this.pageLoaderTimer = null;
   }
+  this.stopAboutSlider();
+  document.body.style.overflow = "";
   window.removeEventListener("scroll", this.onScroll);
   document.removeEventListener("click", this.closeDropdown);
+  document.removeEventListener("keydown", this.onGlobalKeydown);
+  this.teardownAboutObserver();
   this.teardownTutorialObserver();
 },
 
 computed: {
   heroParallaxStyle() {
     return {
-      backgroundPosition: `center calc(50% + ${this.heroParallaxY}px)`
+      backgroundPosition: `calc(50% + 34px) calc(60% + ${this.heroParallaxY}px)`
     };
   },
   tutorialVideoSrc() {
@@ -601,20 +693,119 @@ computed: {
     return this.isTutorialInView
       ? `${base}?autoplay=1&mute=1&playsinline=1`
       : `${base}?autoplay=0&mute=1&playsinline=1`;
+  },
+  selectedTutorialVideoSrc() {
+    if (this.selectedTutorialIndex === null) return "";
+    const links = [
+      "https://www.youtube.com/embed/J1Ip2sC_lss",
+      "https://www.youtube.com/embed/J1Ip2sC_lss",
+      "https://www.youtube.com/embed/J1Ip2sC_lss",
+      "https://www.youtube.com/embed/J1Ip2sC_lss",
+      "https://www.youtube.com/embed/J1Ip2sC_lss"
+    ];
+    const safeIndex = Math.max(0, Math.min(this.selectedTutorialIndex, links.length - 1));
+    return `${links[safeIndex]}?autoplay=1&mute=0&playsinline=1&rel=0`;
   }
 },
 
 methods: {
+syncBodyScrollLock() {
+  const shouldLock = this.selectedTutorialIndex !== null || this.isMobileMenuOpen;
+  document.body.style.overflow = shouldLock ? "hidden" : "";
+},
+
+toggleMobileMenu() {
+  this.isMobileMenuOpen = !this.isMobileMenuOpen;
+  this.syncBodyScrollLock();
+},
+
+closeMobileMenu() {
+  if (!this.isMobileMenuOpen) return;
+  this.isMobileMenuOpen = false;
+  this.syncBodyScrollLock();
+},
+
+onMobileNavSelect(id) {
+  this.closeMobileMenu();
+  this.scrollTo(id);
+},
+
+onGlobalKeydown(e) {
+  if (e.key !== "Escape") return;
+  if (this.openDropdown) this.openDropdown = null;
+  if (this.isMobileMenuOpen) this.closeMobileMenu();
+  if (this.selectedTutorialIndex !== null) this.closeTutorialVideo();
+},
+
+startAboutSlider() {
+  this.stopAboutSlider();
+  if (!Array.isArray(this.aboutImages) || this.aboutImages.length <= 1) return;
+  this.aboutSlideTimer = window.setInterval(() => {
+    this.activeAboutSlide =
+      (this.activeAboutSlide + 1) % this.aboutImages.length;
+  }, 4200);
+},
+
+stopAboutSlider() {
+  if (this.aboutSlideTimer) {
+    window.clearInterval(this.aboutSlideTimer);
+    this.aboutSlideTimer = null;
+  }
+},
+
+aboutFrameClass(index) {
+  const total = Array.isArray(this.aboutImages) ? this.aboutImages.length : 0;
+  if (!total) return "";
+  const offset = (index - this.activeAboutSlide + total) % total;
+  if (offset === 0) return "frame-front";
+  if (offset === 1) return "frame-middle";
+  return "frame-back";
+},
+
+setupAboutObserver() {
+  const section = this.$refs.aboutSection;
+  if (!section || typeof IntersectionObserver === "undefined") {
+    this.isAboutVisible = true;
+    return;
+  }
+
+  this.aboutObserver = new IntersectionObserver(
+    (entries) => {
+      const [entry] = entries;
+      if (entry?.isIntersecting) {
+        this.isAboutVisible = true;
+        this.teardownAboutObserver();
+      }
+    },
+    { threshold: 0.28 }
+  );
+
+  this.aboutObserver.observe(section);
+},
+
+teardownAboutObserver() {
+  if (this.aboutObserver) {
+    this.aboutObserver.disconnect();
+    this.aboutObserver = null;
+  }
+},
 setupTutorialObserver() {
   const section = this.$refs.tutorialSection;
-  if (!section || typeof IntersectionObserver === "undefined") return;
+  if (!section || typeof IntersectionObserver === "undefined") {
+    this.isTutorialVisible = true;
+    return;
+  }
 
   this.tutorialObserver = new IntersectionObserver(
     (entries) => {
       const [entry] = entries;
-      this.isTutorialInView = Boolean(entry?.isIntersecting);
+      const inView = Boolean(entry?.isIntersecting);
+      this.isTutorialInView = inView;
+      if (inView) {
+        this.isTutorialVisible = true;
+      }
     },
-    { threshold: 0.6 }
+    { threshold: 0.45 }
   );
 
   this.tutorialObserver.observe(section);
@@ -625,6 +816,16 @@ teardownTutorialObserver() {
     this.tutorialObserver.disconnect();
     this.tutorialObserver = null;
   }
+},
+
+openTutorialVideo(index) {
+  this.selectedTutorialIndex = index;
+  this.syncBodyScrollLock();
+},
+
+closeTutorialVideo() {
+  this.selectedTutorialIndex = null;
+  this.syncBodyScrollLock();
 },
 
 toggleFaq(i) {
@@ -675,6 +876,8 @@ toggleFaq(i) {
 
   scrollTo(id) {
     this.openDropdown = null;
+    this.isMobileMenuOpen = false;
+    this.syncBodyScrollLock();
     this.activeSection = id;
     document.getElementById(id)?.scrollIntoView({
       behavior: "smooth"
@@ -1028,6 +1231,140 @@ h1, h2, h3, h4, h5, h6{
 .nav-right {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobile-menu-btn {
+  display: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid rgba(15, 23, 42, 0.3);
+  background: #ffffff;
+  padding: 9px 8px;
+  align-items: center;
+  justify-items: center;
+  gap: 4px;
+}
+
+.mobile-menu-btn span {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: #111827;
+  display: block;
+}
+
+.navbar.navbar-scrolled .mobile-menu-btn {
+  background: rgba(248, 250, 252, 0.1);
+  border-color: rgba(248, 250, 252, 0.62);
+}
+
+.navbar.navbar-scrolled .mobile-menu-btn span {
+  background: #f8fafc;
+}
+
+.mobile-nav-fade-enter-active,
+.mobile-nav-fade-leave-active {
+  transition: opacity 0.22s ease;
+}
+
+.mobile-nav-fade-enter-from,
+.mobile-nav-fade-leave-to {
+  opacity: 0;
+}
+
+.mobile-nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mobile-nav-drawer {
+  width: min(84vw, 320px);
+  height: 100%;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+  border-left: 1px solid #d4deec;
+  box-shadow: -14px 0 36px rgba(2, 6, 23, 0.28);
+  padding: 16px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: mobileDrawerIn 0.24s ease;
+}
+
+.mobile-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-nav-logo {
+  height: 46px;
+  width: auto;
+  display: block;
+}
+
+@keyframes mobileDrawerIn {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.mobile-nav-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #c9d5e7;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.mobile-nav-links {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-nav-link {
+  width: 100%;
+  border: 1px solid #d6e0ee;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  text-decoration: none;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 11px 12px;
+}
+
+.mobile-nav-signin {
+  margin-top: auto;
+  border: 1px solid #0f4f25;
+  border-radius: 10px;
+  background: #0f4f25;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 11px 12px;
 }
 
 .section-nav {
@@ -1166,8 +1503,8 @@ h1, h2, h3, h4, h5, h6{
   background:
     linear-gradient(180deg, rgba(10, 27, 20, 0.78) 0%, rgba(10, 27, 20, 0.58) 45%, rgba(10, 27, 20, 0.88) 100%),
     url("@/assets/bg.jpg");
-  background-size: cover;
-  background-position: center;
+  background-size: 114% auto;
+  background-position: 58% center;
   background-repeat: no-repeat;
   display: flex;
   align-items: center;
@@ -1437,12 +1774,18 @@ h1, h2, h3, h4, h5, h6{
     display: none;
   }
 
+  .mobile-menu-btn {
+    display: grid;
+  }
+
   .section-nav {
     display: none;
   }
 
   .hero {
     padding: 110px 6% 60px;
+    background-size: cover;
+    background-position: 56% center;
   }
 
   .hero-shell {
@@ -1471,9 +1814,22 @@ h1, h2, h3, h4, h5, h6{
 }
 
 @media (max-width: 720px) {
+  .logo {
+    height: 40px;
+  }
+
+  .navbar {
+    height: 72px;
+    padding: 0 10px;
+  }
+
   .sign-in-btn {
-    padding: 8px 10px;
-    font-size: 0.72rem;
+    padding: 7px 10px;
+    font-size: 0.7rem;
+  }
+
+  .nav-right .sign-in-btn {
+    display: none;
   }
 
   .sign-in-btn svg {
@@ -1481,10 +1837,43 @@ h1, h2, h3, h4, h5, h6{
     height: 13px;
   }
 
+  .hero {
+    min-height: 500px;
+    padding: 86px 4.5% 42px;
+    background-size: 178% auto;
+    background-position: 50% 14%;
+  }
+
+  .hero::after {
+    opacity: 0.72;
+  }
+
+  .hero-shell {
+    gap: 10px;
+    align-content: start;
+  }
+
+  .hero-logo-wrap {
+    order: -1;
+    margin-bottom: 2px;
+  }
+
+  .hero-content h1 {
+    font-size: clamp(1.5rem, 7.2vw, 2rem);
+    line-height: 1.16;
+  }
+
+  .hero-desc {
+    margin-top: 12px;
+    font-size: 0.92rem;
+    max-width: 96%;
+  }
+
   .hero-search {
+    margin-top: 16px;
     border-radius: 18px;
     grid-template-columns: 1fr;
-    max-width: 390px;
+    max-width: 420px;
   }
 
   .search-field {
@@ -1503,6 +1892,14 @@ h1, h2, h3, h4, h5, h6{
     width: 100%;
     border-radius: 10px;
     min-height: 38px;
+  }
+
+  .hero-seal {
+    width: min(132px, 40vw);
+  }
+
+  .section {
+    padding: 86px 14px;
   }
 }
 
@@ -1524,9 +1921,42 @@ h1, h2, h3, h4, h5, h6{
 
 /* About section border */
 #about.section{
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  margin: 0 6%;
+  position:relative;
+  isolation:isolate;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  background: linear-gradient(180deg, #f8fbff 0%, #f0f6ff 100%);
+  overflow:hidden;
+}
+
+#about.section::before,
+#about.section::after{
+  content:"";
+  position:absolute;
+  z-index:0;
+  pointer-events:none;
+  border-radius:999px;
+  opacity:0.55;
+  filter:blur(0.4px);
+}
+
+#about.section::before{
+  width:340px;
+  height:340px;
+  top:-110px;
+  left:-70px;
+  background:radial-gradient(circle at 35% 35%, rgba(22, 163, 74, 0.22), rgba(59, 130, 246, 0.08) 62%, transparent 76%);
+  animation:aboutAuraDriftA 14s ease-in-out infinite alternate;
+}
+
+#about.section::after{
+  width:300px;
+  height:300px;
+  right:-80px;
+  bottom:-120px;
+  background:radial-gradient(circle at 60% 55%, rgba(234, 179, 8, 0.22), rgba(34, 197, 94, 0.08) 60%, transparent 78%);
+  animation:aboutAuraDriftB 16s ease-in-out infinite alternate;
 }
 
 .section.alt{
@@ -1541,40 +1971,127 @@ h2{
 
 /* ABOUT PANEL */
 .about-panel{
+  position:relative;
+  z-index:1;
   width:100%;
-  max-width:none;
-  margin:0;
+  max-width:1140px;
+  margin:0 auto;
   display:grid;
-  grid-template-columns:50% 50%;
+  grid-template-columns:0.96fr 1.04fr;
   gap:0;
   padding:0;
-  border:1px solid #d1d5db;
-  border-radius:14px;
-  background:#f9fafb;
+  border:1px solid #d7e2ef;
+  border-radius:16px;
+  background:#ffffff;
   overflow:hidden;
-  min-height:360px;
+  min-height:400px;
+  box-shadow:0 14px 36px rgba(15, 23, 42, 0.09);
+  opacity:0;
+  transform:translateY(30px) scale(0.985);
+  transition:opacity .85s ease, transform .85s cubic-bezier(.2,.72,.2,1);
+}
+
+#about.about-visible .about-panel{
+  opacity:1;
+  transform:translateY(0) scale(1);
 }
 
 .about-image-wrap{
   position:relative;
   border:0;
   min-height:100%;
-  background:linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  background:
+    radial-gradient(circle at 16% 16%, rgba(15, 79, 37, 0.14), transparent 45%),
+    linear-gradient(180deg, #f1f7ff 0%, #e6f0fd 100%);
   padding:34px;
   display:grid;
   place-items:center;
 }
 
-.about-single-image{
+.about-slider{
   width:100%;
   max-width:560px;
-  height:auto;
+  border-radius:16px;
+  overflow:visible;
+  perspective:1200px;
+}
+
+.about-frame{
+  width:100%;
   aspect-ratio:4/3;
-  border-radius:12px;
-  border:1px solid #dbe4f1;
-  box-shadow:0 18px 40px rgba(15, 23, 42, 0.2);
+  position:relative;
+  overflow:visible;
+  transform-origin:center;
+}
+
+.about-single-image{
+  width:100%;
+  height:100%;
+  min-width:0;
+  max-width:none;
+  position:absolute;
+  inset:0;
+  border-radius:14px;
+  border:1px solid #d4e1f2;
+  box-shadow:0 18px 42px rgba(15, 23, 42, 0.22);
   object-fit:cover;
   display:block;
+  transform-origin:center center;
+  opacity:.55;
+  transform:translate3d(0, 34px, -108px) rotateX(-14deg) scale(.92);
+  filter:blur(.95px) brightness(.82);
+  transition:
+    transform 1.05s cubic-bezier(.22,.61,.36,1),
+    opacity .95s ease,
+    filter 1.05s ease;
+  backface-visibility:hidden;
+  pointer-events:none;
+  z-index:1;
+  will-change:transform, opacity, filter;
+}
+
+.about-single-image.frame-front{
+  opacity:1;
+  transform:translate3d(0, 0, 20px) rotateX(0deg) scale(1);
+  filter:blur(0) brightness(1);
+  z-index:3;
+}
+
+.about-single-image.frame-middle{
+  opacity:.82;
+  transform:translate3d(0, 16px, -48px) rotateX(-8deg) scale(.96);
+  filter:blur(.35px) brightness(.91);
+  z-index:2;
+}
+
+.about-single-image.frame-back{
+  opacity:.62;
+  transform:translate3d(0, 32px, -96px) rotateX(-13deg) scale(.92);
+  filter:blur(.95px) brightness(.82);
+  z-index:1;
+}
+
+.about-slider:hover .about-single-image.frame-front{
+  transform:translate3d(0, 0, 20px) rotateX(0deg) scale(1.01);
+  filter:saturate(1.05);
+}
+
+@keyframes aboutAuraDriftA{
+  0%{
+    transform:translate3d(0, 0, 0) scale(1);
+  }
+  100%{
+    transform:translate3d(22px, 18px, 0) scale(1.08);
+  }
+}
+
+@keyframes aboutAuraDriftB{
+  0%{
+    transform:translate3d(0, 0, 0) scale(1);
+  }
+  100%{
+    transform:translate3d(-24px, -16px, 0) scale(1.1);
+  }
 }
 
 .about-copy{
@@ -1583,28 +2100,64 @@ h2{
   flex-direction:column;
   justify-content:center;
   gap:14px;
-  padding:32px;
+  padding:36px;
   box-sizing:border-box;
+  opacity:0;
+  transform:translateY(20px);
+  transition:opacity .8s ease .18s, transform .8s ease .18s;
+}
+
+#about.about-visible .about-copy{
+  opacity:1;
+  transform:translateY(0);
+}
+
+.about-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:max-content;
+  padding:7px 14px;
+  border-radius:999px;
+  background:#e6f6ed;
+  color:#0f4f25;
+  font-size:0.74rem;
+  font-weight:700;
+  letter-spacing:0.2px;
+  border:1px solid #cce8d6;
 }
 
 .about-copy h3{
-  margin:0;
+  margin:2px 0 2px;
   font-size:2rem;
-  color:#111827;
+  color:#0f172a;
 }
 
 .about-copy p{
   margin:0;
-  color:#374151;
-  line-height:1.7;
+  color:#334155;
+  line-height:1.72;
+}
+
+.about-focus-grid{
+  margin-top:8px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
 }
 
 .about-focus-card {
-  margin-top: 6px;
-  border: 1px solid #dbe4f1;
+  margin-top: 0;
+  border: 1px solid #dbe7f5;
   background: #f8fbff;
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 15px 16px;
+  transition:transform .22s ease, box-shadow .22s ease;
+}
+
+.about-focus-card:hover{
+  transform:translateY(-2px);
+  box-shadow:0 10px 22px rgba(15, 23, 42, 0.1);
 }
 
 .about-focus-card h4 {
@@ -1617,7 +2170,7 @@ h2{
   margin-top: 6px;
 }
 
-@media (max-width: 900px){
+@media (max-width: 980px){
   .about-panel{
     grid-template-columns:1fr;
     min-height:auto;
@@ -1627,8 +2180,119 @@ h2{
     padding:24px 18px;
   }
 
+  .about-copy{
+    padding:26px 18px 22px;
+  }
+
   .about-single-image{
     max-width:100%;
+  }
+
+  .about-focus-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+@media (max-width: 640px){
+  #about.section{
+    padding-top:64px;
+    padding-bottom:24px;
+  }
+
+  #about.section::before{
+    width:220px;
+    height:220px;
+    top:-78px;
+    left:-66px;
+  }
+
+  #about.section::after{
+    width:210px;
+    height:210px;
+    right:-62px;
+    bottom:-76px;
+  }
+
+  .about-panel{
+    border-radius:12px;
+    min-height:auto;
+  }
+
+  .about-image-wrap{
+    padding:16px 14px;
+  }
+
+  .about-slider{
+    max-width:100%;
+  }
+
+  .about-frame{
+    aspect-ratio: 16 / 11;
+  }
+
+  .about-single-image{
+    border-radius:12px;
+    transform:translate3d(0, 22px, -62px) rotateX(-9deg) scale(.95);
+  }
+
+  .about-single-image.frame-front{
+    transform:translate3d(0, 0, 14px) rotateX(0deg) scale(1);
+  }
+
+  .about-single-image.frame-middle{
+    transform:translate3d(0, 10px, -34px) rotateX(-6deg) scale(.97);
+  }
+
+  .about-single-image.frame-back{
+    transform:translate3d(0, 19px, -58px) rotateX(-9deg) scale(.94);
+  }
+
+  .about-copy{
+    padding:20px 14px 16px;
+    gap:11px;
+  }
+
+  .about-copy h3{
+    font-size:1.65rem;
+  }
+
+  .about-copy p{
+    font-size:0.92rem;
+    line-height:1.62;
+  }
+
+  .about-focus-card{
+    padding:13px 12px;
+  }
+
+  .about-focus-card h4{
+    font-size:0.94rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  #about.section::before,
+  #about.section::after,
+  .about-frame,
+  .about-single-image{
+    animation:none !important;
+  }
+
+  .about-panel,
+  .about-copy,
+  .tutorial-card{
+    opacity:1 !important;
+    transform:none !important;
+    transition:none !important;
+  }
+
+  .about-single-image{
+    transition:none !important;
+  }
+
+  .about-single-image.frame-middle,
+  .about-single-image.frame-back{
+    opacity:0 !important;
   }
 }
 
@@ -1899,25 +2563,37 @@ h2{
 
 
 .tutorial-section{
-  padding:90px 6%;
+  padding:78px 6%;
   background:#f8fafc;
 }
 
 .tutorial-card{
   width:100%;
+  max-width:1140px;
+  margin:0 auto;
   background:#ffffff;
   border:1px solid #d1d5db;
   border-radius:14px;
   display:grid;
   grid-template-columns:50% 50%;
   overflow:hidden;
-  min-height:420px;
+  min-height:400px;
+  opacity:0;
+  transform:translateY(30px) scale(0.985);
+  transition:opacity .85s ease, transform .85s cubic-bezier(.2,.72,.2,1);
+}
+
+.tutorial-section.tutorial-visible .tutorial-card{
+  opacity:1;
+  transform:translateY(0) scale(1);
 }
 
 .video-pane{
   padding:24px;
   border-right:1px solid #e5e7eb;
-  background:#f3f4f6;
+  background:
+    radial-gradient(circle at 16% 16%, rgba(15, 79, 37, 0.14), transparent 45%),
+    linear-gradient(180deg, #f1f7ff 0%, #e6f0fd 100%);
   display:flex;
   align-items:stretch;
 }
@@ -1929,10 +2605,8 @@ h2{
   max-height:none;
   flex:1;
   border-radius:18px;
-  border:1px solid transparent;
-  background:
-    linear-gradient(170deg, #f8fbff 0%, #eef3fb 45%, #dde7f4 100%) padding-box,
-    linear-gradient(135deg, #0f172a 0%, #2563eb 55%, #60a5fa 100%) border-box;
+  border:1px solid #d8e0ea;
+  background:#ffffff;
   box-shadow:
     0 20px 45px rgba(15, 23, 42, 0.20),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -1999,6 +2673,99 @@ h2{
   grid-template-columns:32px 1fr;
   gap:12px;
   align-items:flex-start;
+  cursor:pointer;
+  transition:transform .24s ease, box-shadow .24s ease, border-color .24s ease, background-color .24s ease;
+}
+
+.tutorial-step:hover{
+  transform:translateX(8px) translateY(-1px);
+  border-color:#c7d2fe;
+  background:#f8fbff;
+  box-shadow:0 10px 22px rgba(15, 23, 42, 0.1);
+}
+
+.tutorial-step:hover .step-dot{
+  background:#bfdbfe;
+  color:#1e40af;
+}
+
+.tutorial-modal-overlay{
+  position:fixed;
+  inset:0;
+  z-index:1400;
+  display:grid;
+  place-items:center;
+  background:rgba(2, 6, 23, 0.4);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  padding:22px;
+}
+
+.tutorial-modal{
+  width:min(94vw, 900px);
+  border-radius:16px;
+  background:#0f172a;
+  border:1px solid rgba(148, 163, 184, 0.35);
+  box-shadow:0 24px 54px rgba(2, 6, 23, 0.55);
+  overflow:hidden;
+  position:relative;
+}
+
+.tutorial-modal-video{
+  width:100%;
+  aspect-ratio:16/9;
+  border:0;
+  display:block;
+  background:#000;
+}
+
+.tutorial-modal-close{
+  position:absolute;
+  top:18px;
+  right:18px;
+  width:42px;
+  height:42px;
+  border-radius:12px;
+  border:1px solid rgba(148, 163, 184, 0.45);
+  background:rgba(15, 23, 42, 0.72);
+  color:#f8fafc;
+  font-size:1.35rem;
+  font-weight:700;
+  line-height:1;
+  cursor:pointer;
+  z-index:3;
+  display:grid;
+  place-items:center;
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  box-shadow:0 10px 22px rgba(2, 6, 23, 0.45);
+  transition:transform .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.tutorial-modal-close:hover{
+  background:rgba(30, 41, 59, 0.95);
+  border-color:rgba(96, 165, 250, 0.75);
+  transform:translateY(-1px) scale(1.03);
+  box-shadow:0 14px 26px rgba(2, 6, 23, 0.52);
+}
+
+.tutorial-modal-close:active{
+  transform:translateY(0) scale(0.97);
+}
+
+.tutorial-modal-close:focus-visible{
+  outline:2px solid #60a5fa;
+  outline-offset:2px;
+}
+
+.tutorial-modal-fade-enter-active,
+.tutorial-modal-fade-leave-active{
+  transition:opacity .3s ease;
+}
+
+.tutorial-modal-fade-enter-from,
+.tutorial-modal-fade-leave-to{
+  opacity:0;
 }
 
 .step-dot{
@@ -2038,6 +2805,86 @@ h2{
     height:260px;
     min-height:260px;
     max-height:260px;
+  }
+}
+
+@media (max-width: 640px){
+  .tutorial-section{
+    padding:26px 4.5% 52px;
+  }
+
+  .tutorial-card{
+    border-radius:12px;
+  }
+
+  .video-pane{
+    padding:14px;
+  }
+
+  .video-placeholder{
+    height:210px;
+    min-height:210px;
+    max-height:210px;
+    border-radius:14px;
+  }
+
+  .tutorial-pane{
+    padding:18px 14px;
+    gap:8px;
+  }
+
+  .tutorial-header h2{
+    font-size:1.7rem;
+    margin:12px 0 6px;
+  }
+
+  .tutorial-header p{
+    font-size:0.9rem;
+  }
+
+  .tutorial-step{
+    padding:12px;
+    grid-template-columns:30px 1fr;
+    gap:10px;
+  }
+
+  .tutorial-step:hover{
+    transform:none;
+    box-shadow:none;
+  }
+
+  .tutorial-step h3{
+    font-size:0.94rem;
+  }
+
+  .tutorial-step p{
+    margin-top:4px;
+    font-size:0.86rem;
+    line-height:1.5;
+  }
+
+  .step-dot{
+    width:30px;
+    height:30px;
+    font-size:0.86rem;
+  }
+
+  .tutorial-modal-overlay{
+    padding:12px;
+  }
+
+  .tutorial-modal{
+    width:min(96vw, 900px);
+    border-radius:12px;
+  }
+
+  .tutorial-modal-close{
+    top:10px;
+    right:10px;
+    width:38px;
+    height:38px;
+    border-radius:10px;
+    font-size:1.15rem;
   }
 }
 
@@ -2101,8 +2948,9 @@ h2{
 .faq-question{
   width:100%;
   padding:14px 18px;
-  background:#e0b118;
-  border:1px solid #bf9000;
+  background:#ececec;
+  border:none;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
   border-radius:10px;
   color:#122815;
   font-size:0.94rem;
@@ -2171,12 +3019,12 @@ h2{
   }
 
   .faq-question{
-    font-size:0.82rem;
+    font-size:0.88rem;
     padding:12px 14px;
   }
 
   .faq-answer{
-    font-size:0.86rem;
+    font-size:0.9rem;
     padding:12px 14px 15px;
   }
 }
@@ -2262,4 +3110,8 @@ h2{
 }
 
 </style>
+
+
+
+
 
