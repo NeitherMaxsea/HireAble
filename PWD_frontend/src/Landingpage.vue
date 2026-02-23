@@ -2,13 +2,28 @@
   <div class="page" :class="{ 'page-ready': !showPageLoader }">
     <transition name="page-loader-fade">
       <div
-        v-if="showPageLoader"
+        v-if="showPageLoader || heroSearchLoading"
         class="page-loader-overlay"
         role="status"
         aria-live="polite"
-        aria-label="Loading landing page"
+        :aria-label="heroSearchLoading ? 'Loading search results' : 'Loading landing page'"
       >
-        <div class="dot-spinner" aria-hidden="true">
+        <div v-if="heroSearchLoading" class="search-loading-card">
+          <div class="search-loading-icon" aria-hidden="true">
+            <span class="search-loading-spinner-ring"></span>
+            <span class="search-loading-spinner-core"></span>
+          </div>
+          <div class="search-loading-copy">
+            <p class="search-loading-title">Finding the best job matches</p>
+            <p class="search-loading-subtitle">Please wait while we fetch fresh openings for you.</p>
+            <div class="search-loading-dots" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="dot-spinner" aria-hidden="true">
           <span></span>
           <span></span>
           <span></span>
@@ -54,33 +69,7 @@
 
     <nav class="nav-center">
       <router-link to="/search-jobs" class="nav-link">Find Job</router-link>
-      <div class="nav-dropdown" :class="{ open: openDropdown === 'about-menu' }">
-        <button
-          type="button"
-          class="nav-link nav-dropdown-toggle"
-          aria-haspopup="menu"
-          :aria-expanded="openDropdown === 'about-menu'"
-          @click.stop="toggleAboutDropdown"
-        >
-          About Us
-          <svg class="nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="m6 9 6 6 6-6"></path>
-          </svg>
-        </button>
-
-        <transition name="nav-dropdown">
-          <div
-            v-if="openDropdown === 'about-menu'"
-            class="nav-dropdown-menu"
-            role="menu"
-            aria-label="About Us menu"
-          >
-            <button type="button" class="nav-dropdown-item" role="menuitem" @click="scrollTo('vision')">
-              Vision
-            </button>
-          </div>
-        </transition>
-      </div>
+      <router-link to="/about-us" class="nav-link">About Us</router-link>
       <a href="#tutorial" class="nav-link" @click.prevent="scrollTo('tutorial')">Read First</a>
       <a href="#privacy" class="nav-link" @click.prevent="scrollTo('privacy')">Privacy</a>
       <a href="#contact" class="nav-link" @click.prevent="scrollTo('contact')">Contact Us</a>
@@ -127,7 +116,7 @@
 
           <nav class="mobile-nav-links">
             <router-link to="/search-jobs" class="mobile-nav-link" @click="closeMobileMenu">Find Job</router-link>
-            <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('vision')">Vision</button>
+            <router-link to="/about-us" class="mobile-nav-link" @click="closeMobileMenu">About Us</router-link>
             <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('tutorial')">Read First</button>
             <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('privacy')">Privacy</button>
             <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('contact')">Contact Us</button>
@@ -212,7 +201,9 @@
                 <path d="m6 9 6 6 6-6"></path>
               </svg>
             </label>
-            <button type="submit" class="search-submit">Search</button>
+            <button type="submit" class="search-submit" :disabled="heroSearchLoading">
+              {{ heroSearchLoading ? "Searching..." : "Search" }}
+            </button>
           </form>
         </div>
 
@@ -222,75 +213,83 @@
       </div>
     </section>
 
-    <!-- ABOUT -->
+    <!-- ABOUT CTA -->
     <section
       id="about"
       ref="aboutSection"
-      class="section"
+      class="section about-cta-section"
       :class="{ 'about-visible': isAboutVisible }"
     >
-      <div class="about-panel">
-        <div class="about-image-wrap">
-          <div
-            class="about-slider"
-            aria-label="PWD worker highlights"
-            @mouseenter="stopAboutSlider"
-            @mouseleave="startAboutSlider"
-          >
-            <div class="about-frame">
-              <img
-                v-for="(img, index) in aboutImages"
-                :key="index"
-                :src="img.src"
-                :alt="img.alt"
-                class="about-single-image"
-                :class="aboutFrameClass(index)"
-              />
+      <div class="about-cta-shell">
+        <h3 class="about-cta-title">Do You Want to Work?</h3>
+        <p>
+          Narito na ang platform na tumutulong sa Persons with Disabilities na
+          makahanap ng inclusive at makabuluhang trabaho, kasama ang employers
+          na handang magbigay ng patas na oportunidad.
+        </p>
+
+        <div class="about-cta-content" aria-label="Why use this platform">
+          <div class="about-cta-panel about-cta-benefits">
+            <h4>Why use HireAble Proximity?</h4>
+            <ul class="about-cta-list">
+              <li>
+                <span class="about-cta-check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12.5l4.2 4.2L19 7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <div>
+                  <strong>Inclusive job matching</strong>
+                  <p>Mas madaling hanapin ang roles na tugma sa skills, preferences, at qualifications.</p>
+                </div>
+              </li>
+              <li>
+                <span class="about-cta-check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12.5l4.2 4.2L19 7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <div>
+                  <strong>Employer-ready opportunities</strong>
+                  <p>Mga kumpanya na handang magbigay ng patas at accessible na hiring process.</p>
+                </div>
+              </li>
+              <li>
+                <span class="about-cta-check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12.5l4.2 4.2L19 7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <div>
+                  <strong>Local support focus</strong>
+                  <p>Built for PWD employment assistance in Dasmarinas, Cavite and nearby communities.</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="about-cta-panel about-cta-actions">
+            <h4>Start here</h4>
+            <p class="about-cta-actions-copy">
+              Piliin ang gusto mong gawin ngayon at simulan ang journey mo sa inclusive employment platform.
+            </p>
+            <div class="about-cta-actions-grid">
+              <router-link to="/search-jobs" class="about-cta-action about-cta-action-primary">
+                Browse Jobs
+              </router-link>
+              <router-link to="/about-us" class="about-cta-action">
+                Learn About Us
+              </router-link>
+              <router-link to="/login" class="about-cta-action">
+                Sign In
+              </router-link>
+              <a href="#tutorial" class="about-cta-action">
+                View Tutorial
+              </a>
             </div>
           </div>
         </div>
 
-        <div class="about-copy">
-          <span class="about-badge">Who We Are</span>
-          <h3>About Us</h3>
-          <p>
-            The Employment Assistance Platform for Persons with Disabilities is
-            designed to connect qualified PWD job seekers with inclusive
-            employers in the City of Dasmarinas.
-          </p>
-          <p>
-            With built-in decision support, the system helps make hiring more
-            accessible, fair, and data-guided for both applicants and
-            organizations.
-          </p>
-          <p>
-            Employers can post opportunities with clear accessibility details,
-            while applicants receive role recommendations aligned with their
-            capabilities, preferences, and qualifications.
-          </p>
-          <p>
-            This approach supports inclusive growth by improving visibility of
-            PWD talent, reducing hiring barriers, and creating a more connected
-            local employment ecosystem.
-          </p>
-          <div class="about-focus-grid">
-            <div id="mission" class="about-focus-card">
-              <h4>Mission</h4>
-              <p>
-                To empower Persons with Disabilities by connecting them to inclusive
-                employment opportunities through an accessible and data-guided platform.
-              </p>
-            </div>
-
-            <div id="vision" class="about-focus-card">
-              <h4>Vision</h4>
-              <p>
-                A community where every qualified PWD can access fair, meaningful,
-                and sustainable work opportunities without barriers.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -398,16 +397,10 @@
             This site is managed by RCST students as part of the development of a web-based job employment assistance
             platform for Persons with Disabilities in the City of Dasmarinas with Decision Support System.
           </p>
-          <div class="social-wrapper">
-            <a href="#" class="social-link" aria-label="Facebook">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
-            </a>
-            <a href="#" class="social-link" aria-label="Instagram">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-            </a>
-            <a href="#" class="social-link" aria-label="LinkedIn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
-            </a>
+          <div class="brand-badges" aria-label="Platform highlights">
+            <span class="brand-badge">Dasmarinas, Cavite</span>
+            <span class="brand-badge">Inclusive Hiring</span>
+            <span class="brand-badge">Research Project</span>
           </div>
         </div>
 
@@ -457,6 +450,7 @@ export default {
       heroSeal,
       footerLogo: proximityLogo,
       showPageLoader: true,
+      heroSearchLoading: false,
       pageLoaderTimer: null,
       aboutSlideTimer: null,
       activeAboutSlide: 0,
@@ -478,7 +472,6 @@ export default {
       sectionNavItems: [
         { id: "home", label: "Home" },
         { id: "about", label: "About" },
-        { id: "vision", label: "Vision" },
         { id: "tutorial", label: "Tutorial" },
         { id: "contact", label: "FAQs" },
         { id: "privacy", label: "Privacy" }
@@ -664,7 +657,6 @@ mounted() {
   document.addEventListener("click", this.closeDropdown);
   document.addEventListener("keydown", this.onGlobalKeydown);
   this.onScroll();
-  this.startAboutSlider();
   this.setupAboutObserver();
   this.setupTutorialObserver();
 },
@@ -673,7 +665,6 @@ beforeUnmount() {
     window.clearTimeout(this.pageLoaderTimer);
     this.pageLoaderTimer = null;
   }
-  this.stopAboutSlider();
   document.body.style.overflow = "";
   window.removeEventListener("scroll", this.onScroll);
   document.removeEventListener("click", this.closeDropdown);
@@ -904,13 +895,21 @@ toggleFaq(i) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   },
 
-  submitHeroSearch() {
+  async submitHeroSearch() {
+    if (this.heroSearchLoading) return;
     const query = {};
     if (this.heroFilters.keyword) query.keyword = this.heroFilters.keyword;
     if (this.heroFilters.location) query.location = this.heroFilters.location;
     if (this.heroFilters.category) query.category = this.heroFilters.category;
 
-    this.$router.push({ name: "SearchJobs", query });
+    this.heroSearchLoading = true;
+    try {
+      await this.$router.push({ name: "SearchJobs", query });
+    } finally {
+      if (this.$route.name === "LandingPage") {
+        this.heroSearchLoading = false;
+      }
+    }
   },
 
   onScroll() {
@@ -977,7 +976,137 @@ h1, h2, h3, h4, h5, h6{
   z-index: 3000;
   display: grid;
   place-items: center;
-  background: #dedfe1;
+  background: rgba(15, 23, 42, 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.search-loading-card {
+  min-width: min(92vw, 420px);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(135deg, rgba(7, 29, 16, 0.96) 0%, rgba(8, 44, 23, 0.96) 58%, rgba(7, 36, 19, 0.96) 100%);
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.36);
+  position: relative;
+  overflow: hidden;
+}
+
+.search-loading-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0) 12%, rgba(255, 255, 255, 0.14) 48%, rgba(255, 255, 255, 0) 84%);
+  transform: translateX(-130%);
+  animation: searchLoadingSheen 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.search-loading-icon {
+  width: 44px;
+  height: 44px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.search-loading-spinner-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #f4c41f;
+  border-right-color: #99e0ac;
+  display: block;
+  animation: searchLoadingSpin 0.9s linear infinite;
+}
+
+.search-loading-spinner-core {
+  position: absolute;
+  inset: 12px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #fef3c7 0%, #f4c41f 46%, #d2a806 100%);
+  box-shadow: 0 0 0 4px rgba(244, 196, 31, 0.16);
+  animation: searchLoadingPulse 1.2s ease-in-out infinite;
+}
+
+.search-loading-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.search-loading-title {
+  margin: 0;
+  color: #e9f8ec;
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.search-loading-subtitle {
+  margin: 0;
+  color: rgba(236, 253, 244, 0.86);
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.search-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.search-loading-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(233, 248, 236, 0.86);
+  animation: searchDotBounce 1s ease-in-out infinite;
+}
+
+.search-loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.search-loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes searchLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes searchLoadingPulse {
+  0%,
+  100% {
+    transform: scale(0.94);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
+
+@keyframes searchDotBounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@keyframes searchLoadingSheen {
+  100% {
+    transform: translateX(130%);
+  }
 }
 
 .dot-spinner {
@@ -1913,9 +2042,7 @@ h1, h2, h3, h4, h5, h6{
 #about,
 #tutorial,
 #privacy,
-#contact,
-#mission,
-#vision {
+#contact {
   scroll-margin-top: 108px;
 }
 
@@ -2112,21 +2239,6 @@ h2{
   transform:translateY(0);
 }
 
-.about-badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  width:max-content;
-  padding:7px 14px;
-  border-radius:999px;
-  background:#e6f6ed;
-  color:#0f4f25;
-  font-size:0.74rem;
-  font-weight:700;
-  letter-spacing:0.2px;
-  border:1px solid #cce8d6;
-}
-
 .about-copy h3{
   margin:2px 0 2px;
   font-size:2rem;
@@ -2170,6 +2282,214 @@ h2{
   margin-top: 6px;
 }
 
+.about-cta-section {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.about-cta-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(110deg, rgba(5, 46, 22, 0.86) 0%, rgba(9, 77, 36, 0.74) 42%, rgba(22, 101, 52, 0.66) 100%),
+    url("@/assets/PWD_worker.png") center / cover no-repeat;
+}
+
+.about-cta-section::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(245, 250, 255, 0.12) 0%, rgba(245, 250, 255, 0.04) 100%);
+}
+
+.about-cta-shell {
+  width: min(1060px, 100%);
+  text-align: center;
+  padding: 36px 14px 34px;
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 0.75s ease, transform 0.75s ease;
+}
+
+#about.about-visible .about-cta-shell {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.about-cta-title {
+  margin: 0 0 10px;
+  font-size: clamp(2.8rem, 7vw, 4.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.4px;
+  color: #14532d;
+}
+
+.about-cta-shell > p {
+  margin: 0 auto;
+  max-width: 760px;
+  color: rgba(241, 245, 249, 0.96);
+  line-height: 1.7;
+}
+
+.about-cta-content {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.about-cta-panel {
+  border-radius: 18px;
+  border: 1px solid rgba(177, 219, 193, 0.35);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 252, 247, 0.9) 100%);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(3px);
+  text-align: left;
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.55s ease, transform 0.55s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+#about.about-visible .about-cta-panel {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#about.about-visible .about-cta-panel:nth-child(1) {
+  transition-delay: 0.12s;
+}
+
+#about.about-visible .about-cta-panel:nth-child(2) {
+  transition-delay: 0.22s;
+}
+
+.about-cta-panel:hover {
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.1);
+}
+
+.about-cta-benefits {
+  padding: 18px 18px 16px;
+}
+
+.about-cta-actions {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.about-cta-panel h4 {
+  margin: 0;
+  color: #10231a;
+  font-size: 1.08rem;
+}
+
+.about-cta-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.about-cta-list li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(216, 233, 222, 0.9);
+}
+
+.about-cta-check {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eaf7f0;
+  color: #166534;
+  border: 1px solid #cbead7;
+  margin-top: 1px;
+}
+
+.about-cta-check svg {
+  width: 15px;
+  height: 15px;
+}
+
+.about-cta-list strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.about-cta-list p {
+  margin: 4px 0 0;
+  color: #475569;
+  line-height: 1.45;
+  font-size: 0.85rem;
+}
+
+.about-cta-actions-copy {
+  margin: 10px 0 0;
+  color: #475569;
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.about-cta-actions-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.about-cta-action {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d7e4db;
+  background: rgba(255, 255, 255, 0.82);
+  color: #123b24;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.86rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.about-cta-action:hover {
+  transform: translateY(-1px);
+  border-color: #9fd0b3;
+  background: #ffffff;
+  box-shadow: 0 8px 14px rgba(15, 23, 42, 0.07);
+}
+
+.about-cta-action-primary {
+  background: linear-gradient(180deg, #0f6a32 0%, #0d5629 100%);
+  border-color: #0f6a32;
+  color: #f3f9f4;
+}
+
+.about-cta-action-primary:hover {
+  background: linear-gradient(180deg, #11803b 0%, #0f6a32 100%);
+  border-color: #11803b;
+}
+
 @media (max-width: 980px){
   .about-panel{
     grid-template-columns:1fr;
@@ -2190,6 +2510,15 @@ h2{
 
   .about-focus-grid{
     grid-template-columns:1fr;
+  }
+
+  .about-cta-shell {
+    padding: 28px 4px 26px;
+  }
+
+  .about-cta-content {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 }
 
@@ -2268,6 +2597,34 @@ h2{
   .about-focus-card h4{
     font-size:0.94rem;
   }
+
+  .about-cta-title{
+    font-size: clamp(1.9rem, 10vw, 2.4rem);
+  }
+
+  .about-cta-panel {
+    border-radius: 14px;
+  }
+
+  .about-cta-benefits,
+  .about-cta-actions {
+    padding: 14px;
+  }
+
+  .about-cta-list li {
+    grid-template-columns: 30px 1fr;
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .about-cta-check {
+    width: 26px;
+    height: 26px;
+  }
+
+  .about-cta-actions-grid{
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce){
@@ -2294,21 +2651,6 @@ h2{
   .about-single-image.frame-back{
     opacity:0 !important;
   }
-}
-
-/* MISSION */
-.mission-box{
-  max-width:800px;
-  margin:auto;
-  background:#fff;
-  padding:40px;
-  border-radius:20px;
-  box-shadow:0 15px 35px rgba(0,0,0,.08);
-  transition:.3s;
-}
-
-.mission-box:hover{
-  transform:scale(1.02);
 }
 
 /* CTA */
@@ -2383,34 +2725,25 @@ h2{
   line-height: 1.58;
 }
 
-.social-wrapper {
+.brand-badges {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.brand-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 10px;
-}
-
-.social-link {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: #e0b118;
-  color: #083b1c;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #c99904;
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.social-link svg {
-  width: 12px;
-  height: 12px;
-}
-
-.social-link:hover {
-  background: #e9bc24;
-  transform: translateY(-1px);
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 196, 31, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef5ea;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .footer-nav {
