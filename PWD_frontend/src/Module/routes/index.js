@@ -23,6 +23,9 @@ import AdminLogs from "@/Module/Admin/views/Logs.vue"
 import EmployerLayout from "@/Module/Employer/views/layout/EmployerLayout.vue"
 import EmployerDashboard from "@/Module/Employer/views/HR/dashboard.vue"
 import Applicant from "@/Module/Employer/views/HR/Applicant.vue"
+import ApplicationStatusTracking from "@/Module/Employer/views/HR/ApplicationStatusTracking.vue"
+import InterviewManagement from "@/Module/Employer/views/HR/InterviewManagement.vue"
+import AddEmployee from "@/Module/Employer/views/HR/AddEmployee.vue"
 import EmployeeRecord from "@/Module/Employer/views/HR/EmployeeRecord.vue"
 import EmployerProfile from "@/Module/Employer/views/HR/Profile.vue"
 import EmployerJobPost from "@/Module/Employer/views/HR/Job-management/Job-post-pages.vue"
@@ -41,6 +44,8 @@ import WorkAssignment from "@/Module/Employer/views/Operation/WorkAssignment.vue
 import ReportsAnalytics from "@/Module/Employer/views/Operation/ReportsAnalytics.vue"
 import EmployeeOperationsProfile from "@/Module/Employer/views/Operation/EmployeeProfile.vue"
 import FinanceDashboard from "@/Module/Employer/views/Finance/FinanceDashboard.vue"
+import FinanceLayout from "@/Module/Employer/views/Finance/layout/FinanceLayout.vue"
+import JobApproval from "@/Module/Employer/views/Finance/JobApproval.vue"
 
 // COMPANY ADMIN
 import CompanyAdminLayout from "@/Module/CompanyAdmin/layout/CompanyAdminLayout.vue"
@@ -251,6 +256,36 @@ const routes = [
         },
       },
       {
+        path: "application-status-tracking",
+        name: "ApplicationStatusTracking",
+        component: ApplicationStatusTracking,
+        meta: {
+          title: "PWD Job Portal | Application Status Tracking",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "interview-management",
+        name: "InterviewManagement",
+        component: InterviewManagement,
+        meta: {
+          title: "PWD Job Portal | Interview Management",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "add-employee",
+        name: "EmployerAddEmployee",
+        component: AddEmployee,
+        meta: {
+          title: "PWD Job Portal | Add Employee",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
         path: "employer-records",
         name: "EmployeeRecord",
         component: EmployeeRecord,
@@ -422,6 +457,7 @@ const routes = [
   // ================= EMPLOYER FINANCE =================
   {
     path: "/employer/finance",
+    component: FinanceLayout,
     meta: { requiresAuth: true, requiredRole: "employer" },
     children: [
       {
@@ -430,6 +466,16 @@ const routes = [
         component: FinanceDashboard,
         meta: {
           title: "PWD Job Portal | Finance Dashboard",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "job-approval/:id?",
+        name: "FinanceJobApproval",
+        component: JobApproval,
+        meta: {
+          title: "PWD Job Portal | Job Approval",
           requiresAuth: true,
           requiredRole: "employer",
         },

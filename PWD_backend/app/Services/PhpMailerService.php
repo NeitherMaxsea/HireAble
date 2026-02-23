@@ -14,9 +14,18 @@ class PhpMailerService
 
         $host = (string) (config('mail.mailers.smtp.host') ?: env('MAIL_HOST', '127.0.0.1'));
         $port = (int) (config('mail.mailers.smtp.port') ?: env('MAIL_PORT', 1025));
-        $username = (string) (config('mail.mailers.smtp.username') ?: env('MAIL_USERNAME', ''));
-        $password = (string) (config('mail.mailers.smtp.password') ?: env('MAIL_PASSWORD', ''));
+        $username = trim((string) (config('mail.mailers.smtp.username') ?: env('MAIL_USERNAME', '')));
+        $password = trim((string) (config('mail.mailers.smtp.password') ?: env('MAIL_PASSWORD', '')));
+        $sendgridApiKey = trim((string) env('SENDGRID_API_KEY', ''));
         $encryption = strtolower((string) (config('mail.mailers.smtp.encryption') ?: env('MAIL_ENCRYPTION', '')));
+        $isSendgridHost = str_contains(strtolower($host), 'sendgrid.net');
+
+        if ($isSendgridHost && $username === '') {
+            $username = 'apikey';
+        }
+        if ($isSendgridHost && $password === '' && $sendgridApiKey !== '') {
+            $password = $sendgridApiKey;
+        }
 
         $mail->Host = $host;
         $mail->Port = $port;
@@ -24,7 +33,7 @@ class PhpMailerService
         $mail->SMTPConnectTimeout = (int) env('MAIL_CONNECT_TIMEOUT', 5);
         $mail->Timelimit = (int) env('MAIL_TIME_LIMIT', 10);
         $mail->SMTPKeepAlive = false;
-        $mail->SMTPAuth = $username !== '';
+        $mail->SMTPAuth = $username !== '' || ($isSendgridHost && $password !== '');
         $mail->Username = $username;
         $mail->Password = $password;
 

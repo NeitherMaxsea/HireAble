@@ -113,10 +113,49 @@
             <p class="company">{{ job.companyName || "Company" }}</p>
             <p class="meta">{{ job.location || "Location not specified" }}</p>
             <p class="desc">{{ job.description || "No description provided." }}</p>
+            <div class="result-actions">
+              <button type="button" class="action-btn view-btn" @click="openJobDetails(job)">
+                View
+              </button>
+              <button type="button" class="action-btn apply-btn" @click="applyJobSoon">
+                Apply
+              </button>
+            </div>
           </article>
         </div>
       </section>
     </main>
+
+    <transition name="detail-modal-fade">
+      <div
+        v-if="selectedJob"
+        class="detail-modal-overlay"
+        @click="closeJobDetails"
+      >
+        <article class="detail-modal" @click.stop>
+          <div class="detail-head">
+            <div>
+              <h2>{{ selectedJob.title || "Untitled Role" }}</h2>
+              <p class="detail-company">{{ selectedJob.companyName || "Company" }}</p>
+            </div>
+            <button type="button" class="detail-close-btn" @click="closeJobDetails" aria-label="Close job details">
+              &times;
+            </button>
+          </div>
+          <div class="detail-body">
+            <p><strong>Location:</strong> {{ selectedJob.location || "Location not specified" }}</p>
+            <p><strong>Category:</strong> {{ selectedJob.category || "Not specified" }}</p>
+            <p><strong>Type:</strong> {{ selectedJob.type || "Open" }}</p>
+            <p><strong>Description:</strong></p>
+            <p>{{ selectedJob.description || "No description provided." }}</p>
+          </div>
+          <div class="detail-actions">
+            <button type="button" class="action-btn view-btn" @click="closeJobDetails">Close</button>
+            <button type="button" class="action-btn apply-btn" @click="applyJobSoon">Apply</button>
+          </div>
+        </article>
+      </div>
+    </transition>
 
     <footer id="privacy" class="footer">
       <div class="footer-container">
@@ -179,6 +218,7 @@ export default {
       loadingOverlayTimer: null,
       allJobs: [],
       jobsUnsubscribe: null,
+      selectedJob: null,
     };
   },
   computed: {
@@ -212,6 +252,7 @@ export default {
   mounted() {
     this.startJobsFeed();
     window.addEventListener("scroll", this.onScroll, { passive: true });
+    window.addEventListener("keydown", this.onKeydown);
     document.addEventListener("click", this.closeDropdown);
     this.onScroll();
   },
@@ -219,6 +260,7 @@ export default {
     this.stopJobsFeed();
     this.clearLoadingOverlayTimer();
     window.removeEventListener("scroll", this.onScroll);
+    window.removeEventListener("keydown", this.onKeydown);
     document.removeEventListener("click", this.closeDropdown);
   },
   methods: {
@@ -237,6 +279,20 @@ export default {
       if (!e.target.closest(".nav-dropdown")) {
         this.openDropdown = null;
       }
+    },
+    onKeydown(e) {
+      if (e.key === "Escape" && this.selectedJob) {
+        this.closeJobDetails();
+      }
+    },
+    openJobDetails(job) {
+      this.selectedJob = job;
+    },
+    closeJobDetails() {
+      this.selectedJob = null;
+    },
+    applyJobSoon() {
+      window.alert("Apply feature is coming soon.");
     },
     startJobsFeed() {
       this.jobsLoading = true;
@@ -741,6 +797,119 @@ export default {
   margin: 0;
   color: #64748b;
   line-height: 1.5;
+}
+
+.result-actions {
+  margin-top: 4px;
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.view-btn {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.view-btn:hover {
+  background: #dcfce7;
+}
+
+.apply-btn {
+  border-color: #fde68a;
+  background: #fefce8;
+  color: #92400e;
+}
+
+.apply-btn:hover {
+  background: #fef9c3;
+}
+
+.detail-modal-fade-enter-active,
+.detail-modal-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.detail-modal-fade-enter-from,
+.detail-modal-fade-leave-to {
+  opacity: 0;
+}
+
+.detail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.detail-modal {
+  width: min(94vw, 700px);
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.3);
+  padding: 18px;
+}
+
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.detail-head h2 {
+  margin: 0;
+  font-size: 1.18rem;
+}
+
+.detail-company {
+  margin: 6px 0 0;
+  color: #475569;
+  font-weight: 600;
+}
+
+.detail-close-btn {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font-size: 1.7rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.detail-body p {
+  margin: 0 0 10px;
+  color: #334155;
+  line-height: 1.55;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .footer {

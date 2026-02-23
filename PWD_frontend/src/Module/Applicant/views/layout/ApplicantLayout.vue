@@ -22,6 +22,50 @@
         </div>
 
         <div class="datetime">
+          <div class="topbar-notif">
+            <button
+              class="notif-bell"
+              :class="{ 'has-new': hasNewNotifications }"
+              @click="handleNotificationBellClick"
+              aria-label="Notifications"
+              type="button"
+            >
+              <i class="bi bi-bell-fill"></i>
+              <span v-if="unreadNotificationsCount > 0" class="notif-count">
+                {{ unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount }}
+              </span>
+            </button>
+
+            <div v-if="isTopbarNotifOpen" class="topbar-notif-panel">
+              <div class="topbar-notif-head">
+                <h4>Notifications</h4>
+              </div>
+
+              <div class="topbar-notif-list-wrap">
+                <div v-if="latestNotifications.length === 0" class="topbar-notif-empty">
+                  No notifications yet
+                </div>
+
+                <ul v-else class="topbar-notif-list">
+                  <li
+                    v-for="event in latestNotifications"
+                    :key="`top-${event.id}`"
+                    class="topbar-notif-item"
+                    role="button"
+                    tabindex="0"
+                    @click="openNotification(event)"
+                    @keydown.enter="openNotification(event)"
+                  >
+                    <span class="topbar-notif-dot"></span>
+                    <div class="topbar-notif-copy">
+                      <p class="topbar-notif-title">{{ event.title }}</p>
+                      <p class="topbar-notif-time">{{ formatRelativeTime(event.timestampMillis) }}</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
           <span>{{ formattedDate }}</span>
           <span class="dot">|</span>
           <span>{{ formattedTime }}</span>
@@ -72,17 +116,17 @@
 
             <div class="events-card">
               <div class="events-head">
-                <h4>Notifications</h4>
-                <p>{{ selectedDateLabel }}</p>
+                <h4>Latest Notifications</h4>
+                <p>{{ latestNotifications.length }} of {{ notifications.length }}</p>
               </div>
 
-              <div v-if="selectedDateEvents.length === 0" class="events-empty">
-                No notifications for this date
+              <div v-if="latestNotifications.length === 0" class="events-empty">
+                No notifications yet
               </div>
 
               <ul v-else class="events-list">
                 <li
-                  v-for="event in selectedDateEvents"
+                  v-for="event in latestNotifications"
                   :key="event.id"
                   class="event-item"
                   role="button"
@@ -143,6 +187,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import SidebarApplicant from "@/components/sb-applicant.vue"
+import { db } from "@/lib/client-platform"
+import { collection, onSnapshot, query, where } from "@/lib/laravel-data"
 
 const router = useRouter()
 const now = ref(new Date())
@@ -152,33 +198,12 @@ const timerId = ref(null)
 const isMobileSidebarOpen = ref(false)
 const resizeHandler = ref(null)
 const isNotificationModalOpen = ref(false)
+const isTopbarNotifOpen = ref(false)
 const activeNotification = ref(null)
-const scheduleEvents = ref([
-  {
-    id: "ev-1",
-    dateKey: toDateKey(addDays(new Date(), 1)),
-    time: "09:00 AM",
-    title: "Interview - Data Encoder",
-    location: "HR Office, La Salle",
-    type: "interview"
-  },
-  {
-    id: "ev-2",
-    dateKey: toDateKey(addDays(new Date(), 2)),
-    time: "01:30 PM",
-    title: "Job Fair Orientation",
-    location: "Online Meeting",
-    type: "orientation"
-  },
-  {
-    id: "ev-3",
-    dateKey: toDateKey(new Date()),
-    time: "04:00 PM",
-    title: "Application Follow-up",
-    location: "Recruitment Team",
-    type: "followup"
-  }
-])
+const notifications = ref([])
+const notificationsUnsubscribe = ref(null)
+const applicantIdentity = ref({ id: "", email: "" })
+const lastSeenMillis = ref(0)
 
 const updateTime = () => {
   now.value = new Date()
@@ -194,12 +219,55 @@ onMounted(() => {
     }
   }
   window.addEventListener("resize", resizeHandler.value)
+
+  const userId = String(localStorage.getItem("userUid") || localStorage.getItem("uid") || "").trim()
+  const userEmail = String(localStorage.getItem("userEmail") || "").trim().toLowerCase()
+  applicantIdentity.value = { id: userId, email: userEmail }
+
+  const cachedLastSeen = Number(localStorage.getItem(notificationStorageKey.value) || 0)
+  lastSeenMillis.value = Number.isFinite(cachedLastSeen) ? cachedLastSeen : 0
+
+  let notificationsTarget = null
+  if (userId) {
+    notificationsTarget = query(collection(db, "applications"), where("applicantId", "==", userId))
+  } else if (userEmail) {
+    notificationsTarget = query(collection(db, "applications"), where("applicantEmail", "==", userEmail))
+  }
+
+  if (notificationsTarget) {
+    notificationsUnsubscribe.value = onSnapshot(notificationsTarget, snapshot => {
+      const rows = snapshot.docs.map((docSnap) => {
+        const raw = docSnap.data() || {}
+        const notificationDate = String(raw.updatedAt || raw.createdAt || raw.appliedAt || "").trim()
+        const timestampMillis = toMillis(notificationDate)
+        const status = normalizeNotificationType(raw.status)
+        const jobTitle = String(raw.jobTitle || "your selected job")
+
+        return {
+          id: String(raw.id || docSnap.id || `notif-${Math.random().toString(36).slice(2)}`),
+          dateKey: toDateKey(new Date(timestampMillis || Date.now())),
+          time: formatNotificationTime(timestampMillis || Date.now()),
+          title: buildNotificationTitle(status, jobTitle),
+          location: `Application status: ${String(raw.status || "pending")}`,
+          type: status,
+          timestampMillis,
+        }
+      })
+
+      notifications.value = rows.sort((a, b) => b.timestampMillis - a.timestampMillis)
+    }, () => {
+      notifications.value = []
+    })
+  }
 })
 
 onBeforeUnmount(() => {
   if (timerId.value) clearInterval(timerId.value)
   if (resizeHandler.value) {
     window.removeEventListener("resize", resizeHandler.value)
+  }
+  if (typeof notificationsUnsubscribe.value === "function") {
+    notificationsUnsubscribe.value()
   }
 })
 
@@ -229,17 +297,18 @@ const monthYearLabel = computed(() =>
   })
 )
 
-const selectedDateLabel = computed(() =>
-  selectedDate.value.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric"
-  })
+const notificationStorageKey = computed(() => {
+  const keyIdentity = applicantIdentity.value.id || applicantIdentity.value.email || "anonymous"
+  return `applicant_last_seen_notifications_${keyIdentity}`
+})
+
+const latestNotifications = computed(() => notifications.value.slice(0, 3))
+
+const unreadNotificationsCount = computed(() =>
+  notifications.value.filter((item) => item.timestampMillis > lastSeenMillis.value).length
 )
 
-const selectedDateEvents = computed(() =>
-  scheduleEvents.value.filter(event => event.dateKey === toDateKey(selectedDate.value))
-)
+const hasNewNotifications = computed(() => unreadNotificationsCount.value > 0)
 
 const calendarDays = computed(() => {
   const year = visibleMonth.value.getFullYear()
@@ -326,22 +395,36 @@ function toDateKey(dateObj) {
   return `${y}-${m}-${d}`
 }
 
-function addDays(baseDate, days) {
-  const d = new Date(baseDate)
-  d.setDate(d.getDate() + days)
-  return d
-}
-
 function eventCountByDate(dateObj) {
   const key = toDateKey(dateObj)
-  return scheduleEvents.value.filter(event => event.dateKey === key).length
+  return notifications.value.filter(event => event.dateKey === key).length
 }
 
 function openNotification(event) {
   if (!event) return
 
+  markNotificationsAsSeen()
+  isTopbarNotifOpen.value = false
   activeNotification.value = event
   isNotificationModalOpen.value = true
+}
+
+function persistLastSeen(value) {
+  const safeValue = Number.isFinite(value) ? Math.max(0, value) : 0
+  localStorage.setItem(notificationStorageKey.value, String(safeValue))
+}
+
+function markNotificationsAsSeen() {
+  const latestTimestamp = notifications.value[0]?.timestampMillis || Date.now()
+  lastSeenMillis.value = latestTimestamp
+  persistLastSeen(latestTimestamp)
+}
+
+function handleNotificationBellClick() {
+  isTopbarNotifOpen.value = !isTopbarNotifOpen.value
+  if (isTopbarNotifOpen.value) {
+    markNotificationsAsSeen()
+  }
 }
 
 function toggleMobileSidebar() {
@@ -357,17 +440,7 @@ function closeNotificationModal() {
 }
 
 function goToNotificationPage() {
-  const event = activeNotification.value
-  if (!event) return
-
-  if (event.type === "interview") {
-    router.push("/applicant/interviews")
-  } else if (event.type === "followup") {
-    router.push("/applicant/applications")
-  } else {
-    router.push("/applicant/notifications")
-  }
-
+  router.push("/applicant/job_list")
   closeNotificationModal()
 }
 
@@ -378,13 +451,70 @@ function isSameDate(a, b) {
     a.getDate() === b.getDate()
   )
 }
+
+function toMillis(value) {
+  if (!value) return 0
+  if (typeof value === "number" && Number.isFinite(value)) return value
+
+  const normalized = String(value).trim()
+  if (!normalized) return 0
+
+  const direct = new Date(normalized)
+  if (!Number.isNaN(direct.getTime())) return direct.getTime()
+
+  const mysqlLike = new Date(normalized.replace(" ", "T"))
+  if (!Number.isNaN(mysqlLike.getTime())) return mysqlLike.getTime()
+
+  return 0
+}
+
+function formatNotificationTime(timestampMillis) {
+  const dateObj = new Date(timestampMillis)
+  return dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+}
+
+function normalizeNotificationType(status) {
+  const normalized = String(status || "").trim().toLowerCase()
+  if (["accepted", "approved", "hired"].includes(normalized)) return "accepted"
+  if (["rejected", "declined", "denied"].includes(normalized)) return "rejected"
+  if (normalized === "pending") return "pending"
+  return "application"
+}
+
+function buildNotificationTitle(type, jobTitle) {
+  if (type === "accepted") return `Application accepted: ${jobTitle}`
+  if (type === "rejected") return `Application update: ${jobTitle}`
+  if (type === "pending") return `Application pending: ${jobTitle}`
+  return `Application submitted: ${jobTitle}`
+}
+
+function formatRelativeTime(timestampMillis) {
+  const ts = Number(timestampMillis || 0)
+  if (!ts) return ""
+
+  const diffMs = Date.now() - ts
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+
+  if (diffMs < minute) return "Now"
+  if (diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))}m ago`
+  if (diffMs < day) return `${Math.max(1, Math.floor(diffMs / hour))}h ago`
+
+  return new Date(ts).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
 </script>
 
 <style scoped>
 .layout {
   display: grid;
   grid-template-columns: auto 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: #f5f7fb;
 }
 
@@ -394,6 +524,8 @@ function isSameDate(a, b) {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .topbar {
@@ -446,6 +578,142 @@ function isSameDate(a, b) {
   gap: 8px;
   font-size: 14px;
   color: #6b7280;
+  position: relative;
+}
+
+.topbar-notif {
+  position: relative;
+}
+
+.notif-bell {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #dbe2ea;
+  background: #ffffff;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.notif-bell i {
+  font-size: 15px;
+}
+
+.notif-bell.has-new {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.notif-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  padding: 0 4px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
+.topbar-notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(460px, 92vw);
+  background: #f7f7f7;
+  border: 1px solid #d6d6d6;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  z-index: 70;
+  max-height: 420px;
+  overflow: hidden;
+}
+
+.topbar-notif-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #dddddd;
+}
+
+.topbar-notif-head h4 {
+  margin: 0;
+  font-size: 22px;
+  color: #2e2e2e;
+  font-weight: 700;
+}
+
+.topbar-notif-list-wrap {
+  max-height: 352px;
+  overflow-y: auto;
+}
+
+.topbar-notif-empty {
+  padding: 16px;
+  color: #8b8b8b;
+  font-size: 14px;
+}
+
+.topbar-notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.topbar-notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #e6e6e6;
+  cursor: pointer;
+  background: #f7f7f7;
+}
+
+.topbar-notif-item:hover {
+  background: #f2f2f2;
+}
+
+.topbar-notif-item:last-child {
+  border-bottom: none;
+}
+
+.topbar-notif-item:focus {
+  outline: 2px solid #c7d2fe;
+  outline-offset: -2px;
+}
+
+.topbar-notif-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #9b8af5;
+  margin-top: 7px;
+  flex: 0 0 10px;
+}
+
+.topbar-notif-copy {
+  min-width: 0;
+}
+
+.topbar-notif-title {
+  margin: 0;
+  color: #2f2f2f;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.topbar-notif-time {
+  margin: 6px 0 0;
+  color: #9ca3af;
+  font-size: 14px;
 }
 
 .dot {
@@ -457,6 +725,7 @@ function isSameDate(a, b) {
   display: flex;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .content {
@@ -798,6 +1067,26 @@ function isSameDate(a, b) {
 .event-type.followup {
   background: #fef3c7;
   color: #92400e;
+}
+
+.event-type.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.event-type.accepted {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.event-type.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.event-type.application {
+  background: #e2e8f0;
+  color: #334155;
 }
 
 @media (max-width: 1024px) {

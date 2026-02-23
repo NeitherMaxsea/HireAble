@@ -16,7 +16,21 @@
 
               <div>
                 <label>Location *</label>
-                <input v-model="job.location" placeholder="e.g. Manila">
+                <select v-model="job.location">
+                  <option disabled value="">Select barangay</option>
+                  <option
+                    v-for="barangay in dasmaBarangays"
+                    :key="barangay"
+                    :value="barangay"
+                  >
+                    {{ barangay }}
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label>Exact Address *</label>
+                <input v-model="job.exactAddress" placeholder="Street, block, lot, landmark">
               </div>
 
               <div>
@@ -150,10 +164,11 @@
 <script>
 import { auth, db } from "@/lib/client-platform"
 import { onAuthStateChanged } from "@/lib/session-auth"
-import { collection, addDoc, serverTimestamp, doc, getDoc } from "@/lib/laravel-data"
+import { doc, getDoc } from "@/lib/laravel-data"
 import api from "@/services/api"
 import Toastify from "toastify-js"
 import "toastify-js/src/toastify.css"
+import { DASMA_BARANGAYS } from "@/constants/dasmaBarangays"
 
 const toast = {
   success(text) {
@@ -176,6 +191,7 @@ export default {
   data() {
       return {
         showMore: false,
+        dasmaBarangays: DASMA_BARANGAYS,
         imageFile: null,
         preview: null,
         imageFile2: null,
@@ -184,6 +200,7 @@ export default {
         job: {
           title: "",
           location: "",
+          exactAddress: "",
           type: "",
           description: "",
           qualifications: "",
@@ -482,6 +499,7 @@ export default {
       if (
         !this.job.title ||
         !this.job.location ||
+        !this.job.exactAddress ||
         !this.job.type ||
         !this.job.description
       ) {
@@ -533,21 +551,23 @@ export default {
           return
         }
 
-        await addDoc(collection(db, "jobs"), {
+        await api.post("/jobs", {
           ...this.job,
           images: [this.job.imageUrl, this.job.imageUrl2].filter(Boolean),
-          status: "open",
+          status: "pending_finance_review",
+          financeApprovalStatus: "pending",
+          financeApprovalNote: "",
+          financeRejectionReason: "",
           postedByName: poster.name,
           postedByEmail: poster.email,
           postedByRole: poster.role,
           postedByUid: poster.uid,
           companyId: poster.companyId || "",
           companyName: poster.companyName || "",
-          createdByCompanyAdminUid: poster.createdByCompanyAdminUid || "",
-          createdAt: serverTimestamp()
+          createdByCompanyAdminUid: poster.createdByCompanyAdminUid || ""
         })
 
-        toast.success("Job posted successfully!")
+        toast.success("Job submitted for Finance approval.")
 
         // RESET FORM
         Object.keys(this.job).forEach(k => this.job[k] = "")
@@ -622,29 +642,23 @@ export default {
 
 /* ROOT */
 .app {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
+  display: block;
   background: #f5f7fb;
 }
 
 .main-wrapper {
-  flex: 1;
+  width: 100%;
 }
 
 main {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
+  display: block;
 }
 
 .content {
-  flex: 1;
   padding: 30px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow-y: auto;
 }
 
 /* CARD */

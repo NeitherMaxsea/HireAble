@@ -8,9 +8,11 @@ use App\Models\User;
 use App\Services\PhpMailerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -498,18 +500,44 @@ class AuthController extends Controller
 
     private function findUserByLogin(string $loginValue): ?User
     {
-        return User::query()
-            ->whereRaw('LOWER(email) = ?', [$loginValue])
-            ->orWhereRaw('LOWER(username) = ?', [$loginValue])
-            ->first();
+        $query = User::query()->whereRaw('LOWER(email) = ?', [$loginValue]);
+
+        if (Schema::hasColumn('users', 'username')) {
+            $query->orWhereRaw('LOWER(username) = ?', [$loginValue]);
+        }
+
+        try {
+            return $query->first();
+        } catch (QueryException $e) {
+            Log::warning('Login username lookup failed for users table; falling back to email-only lookup.', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return User::query()
+                ->whereRaw('LOWER(email) = ?', [$loginValue])
+                ->first();
+        }
     }
 
     private function findAdminByLogin(string $loginValue): ?Admin
     {
-        return Admin::query()
-            ->whereRaw('LOWER(email) = ?', [$loginValue])
-            ->orWhereRaw('LOWER(username) = ?', [$loginValue])
-            ->first();
+        $query = Admin::query()->whereRaw('LOWER(email) = ?', [$loginValue]);
+
+        if (Schema::hasColumn('admins', 'username')) {
+            $query->orWhereRaw('LOWER(username) = ?', [$loginValue]);
+        }
+
+        try {
+            return $query->first();
+        } catch (QueryException $e) {
+            Log::warning('Login username lookup failed for admins table; falling back to email-only lookup.', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return Admin::query()
+                ->whereRaw('LOWER(email) = ?', [$loginValue])
+                ->first();
+        }
     }
 
     private function resolveAccountForSession(string $uid, ?string $accountType, string $sessionKey): User|Admin|null

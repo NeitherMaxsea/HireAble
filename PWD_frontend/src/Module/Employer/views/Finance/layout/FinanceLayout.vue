@@ -1,36 +1,27 @@
 <template>
   <div class="layout">
-
-    <!-- SIDEBAR -->
     <aside class="sidebar-area">
-      <Sidebar />
+      <FinanceSidebar />
     </aside>
 
-    <!-- MAIN CONTENT -->
     <div class="main-content">
+      <FinanceNavbar />
 
-      <!-- TOP NAVBAR -->
-      <Navbar />
-
-      <!-- PAGE CONTENT -->
       <main class="page-content">
         <transition name="page-fade" mode="out-in">
           <router-view />
         </transition>
       </main>
-
     </div>
-
   </div>
 </template>
 
 <script setup>
-import Sidebar from "@/components/sb-employer.vue"
-import Navbar from "@/components/nv-employer.vue"
+import FinanceSidebar from "@/components/sb-employer-finance.vue"
+import FinanceNavbar from "@/components/nv-employer-finance.vue"
 </script>
 
 <style scoped>
-/* ROOT */
 .layout {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -43,32 +34,29 @@ import Navbar from "@/components/nv-employer.vue"
   overflow: hidden;
 }
 
-
-/* MAIN CONTENT */
 .main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
   min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: #f5f7fb;
   overflow: hidden;
 }
 
-/* PAGE CONTENT */
 .page-content {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
 }
 
-/* FADE */
 .page-fade-enter-active {
   transition: opacity 0.25s ease;
 }
+
 .page-fade-leave-active {
   transition: opacity 0.2s ease;
 }
+
 .page-fade-enter-from,
 .page-fade-leave-to {
   opacity: 0;
@@ -79,7 +67,4 @@ import Navbar from "@/components/nv-employer.vue"
     grid-template-columns: 1fr;
   }
 }
-
-
-
 </style>

@@ -42,6 +42,7 @@ Route::delete('/jobs/{id}', [JobController::class, 'destroy']);
 
 Route::get('/applications', [ApplicationController::class, 'index']);
 Route::post('/applications', [ApplicationController::class, 'store']);
+Route::put('/applications/{id}', [ApplicationController::class, 'update']);
 
 Route::get('/logs', [LogController::class, 'index']);
 

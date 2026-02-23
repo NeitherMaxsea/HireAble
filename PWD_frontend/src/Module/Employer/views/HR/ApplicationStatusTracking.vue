@@ -2,12 +2,37 @@
   <section class="content">
     <div class="page-header">
       <div>
-        <h2>Applicant Lists</h2>
-        <p class="subtitle">Review applications from your job posts and decide who moves forward.</p>
+        <h2>Application Status Tracking</h2>
+        <p class="subtitle">
+          Track applicant progress and update statuses: Pending, Interviewed, Accepted, Rejected.
+        </p>
       </div>
       <button class="refresh-btn" :disabled="loading" @click="loadApplications">
         {{ loading ? "Refreshing..." : "Refresh" }}
       </button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <p class="label">Total</p>
+        <p class="value">{{ totals.total }}</p>
+      </div>
+      <div class="stat-card pending">
+        <p class="label">Pending</p>
+        <p class="value">{{ totals.pending }}</p>
+      </div>
+      <div class="stat-card interviewed">
+        <p class="label">Interviewed</p>
+        <p class="value">{{ totals.interviewed }}</p>
+      </div>
+      <div class="stat-card accepted">
+        <p class="label">Accepted</p>
+        <p class="value">{{ totals.accepted }}</p>
+      </div>
+      <div class="stat-card rejected">
+        <p class="label">Rejected</p>
+        <p class="value">{{ totals.rejected }}</p>
+      </div>
     </div>
 
     <div class="filters">
@@ -15,12 +40,13 @@
         v-model.trim="search"
         type="text"
         class="search"
-        placeholder="Search by applicant, email, or position"
+        placeholder="Search by applicant, email, or job title"
       />
 
       <select v-model="statusFilter" class="status-filter">
         <option value="all">All statuses</option>
         <option value="pending">Pending</option>
+        <option value="interviewed">Interviewed</option>
         <option value="accepted">Accepted</option>
         <option value="rejected">Rejected</option>
       </select>
@@ -37,7 +63,7 @@
             <th>Job Title</th>
             <th>Applied At</th>
             <th>Status</th>
-            <th>Actions</th>
+            <th>Update</th>
           </tr>
         </thead>
         <tbody>
@@ -54,28 +80,25 @@
                 {{ toTitle(entry.status) }}
               </span>
             </td>
-            <td class="actions-cell">
-              <button
-                class="btn accept"
-                :disabled="entry.status === 'accepted' || busyId === entry.id"
-                @click="updateStatus(entry, 'accepted')"
+            <td>
+              <select
+                class="update-select"
+                :value="entry.status"
+                :disabled="busyId === entry.id"
+                @change="onStatusChange(entry, $event)"
               >
-                Accept
-              </button>
-              <button
-                class="btn reject"
-                :disabled="entry.status === 'rejected' || busyId === entry.id"
-                @click="updateStatus(entry, 'rejected')"
-              >
-                Reject
-              </button>
+                <option value="pending">Pending</option>
+                <option value="interviewed">Interviewed</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+              </select>
             </td>
           </tr>
         </tbody>
       </table>
 
       <div v-else class="empty">
-        {{ loading ? "Loading applicants..." : "No applicants found." }}
+        {{ loading ? "Loading applications..." : "No applications found." }}
       </div>
     </div>
   </section>
@@ -94,6 +117,8 @@ const loading = ref(false)
 const busyId = ref("")
 const errorMessage = ref("")
 
+const allowedStatuses = new Set(["pending", "interviewed", "accepted", "rejected"])
+
 const toTitle = (value) => {
   const text = String(value || "").trim().toLowerCase()
   if (!text) return "Unknown"
@@ -109,9 +134,7 @@ const formatDateTime = (value) => {
 
 const normalizeStatus = (value) => {
   const status = String(value || "pending").trim().toLowerCase()
-  if (status === "accepted" || status === "rejected" || status === "pending") {
-    return status
-  }
+  if (allowedStatuses.has(status)) return status
   return "pending"
 }
 
@@ -144,12 +167,28 @@ const filteredApplicants = computed(() => {
   })
 })
 
+const totals = computed(() => {
+  const base = {
+    total: applicants.value.length,
+    pending: 0,
+    interviewed: 0,
+    accepted: 0,
+    rejected: 0,
+  }
+
+  applicants.value.forEach((entry) => {
+    if (entry.status in base) base[entry.status] += 1
+  })
+
+  return base
+})
+
 function resolveListParams() {
   const companyId = String(localStorage.getItem("companyId") || "").trim()
   const postedByUid = String(
     localStorage.getItem("userUid") ||
-    localStorage.getItem("uid") ||
-    ""
+      localStorage.getItem("uid") ||
+      ""
   ).trim()
 
   if (companyId) return { companyId }
@@ -171,7 +210,6 @@ async function loadApplications() {
         const status = normalizeStatus(row?.status)
         return {
           id: String(row?.id || ""),
-          jobId: String(row?.jobId || ""),
           jobTitle: String(row?.jobTitle || "Untitled Job"),
           applicantId: String(row?.applicantId || "N/A"),
           applicantName: String(row?.applicantName || "Applicant"),
@@ -184,25 +222,28 @@ async function loadApplications() {
       .sort((a, b) => new Date(b.appliedAt || 0) - new Date(a.appliedAt || 0))
   } catch (err) {
     console.error(err)
-    errorMessage.value = err?.response?.data?.message || "Failed to load applicants."
+    errorMessage.value = err?.response?.data?.message || "Failed to load applications."
   } finally {
     loading.value = false
   }
 }
 
-async function updateStatus(entry, status) {
+async function onStatusChange(entry, event) {
   if (!entry?.id) return
+  const nextStatus = normalizeStatus(event?.target?.value)
+  if (!allowedStatuses.has(nextStatus) || nextStatus === entry.status) return
 
   busyId.value = entry.id
   try {
-    await api.put(`/applications/${entry.id}`, { status })
+    await api.put(`/applications/${entry.id}`, { status: nextStatus })
     applicants.value = applicants.value.map((item) =>
-      item.id === entry.id ? { ...item, status } : item
+      item.id === entry.id ? { ...item, status: nextStatus } : item
     )
-    notify(`Application ${status}.`, status === "accepted" ? "#16a34a" : "#dc2626")
+    notify(`Status updated to ${toTitle(nextStatus)}.`, "#16a34a")
   } catch (err) {
     console.error(err)
     notify(err?.response?.data?.message || "Failed to update status.", "#dc2626")
+    if (event?.target) event.target.value = entry.status
   } finally {
     busyId.value = ""
   }
@@ -248,6 +289,48 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.stat-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.stat-card .label {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.stat-card .value {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.stat-card.pending {
+  border-color: #fcd34d;
+}
+
+.stat-card.interviewed {
+  border-color: #93c5fd;
+}
+
+.stat-card.accepted {
+  border-color: #86efac;
+}
+
+.stat-card.rejected {
+  border-color: #fca5a5;
+}
+
 .filters {
   display: flex;
   gap: 10px;
@@ -255,7 +338,8 @@ onMounted(() => {
 }
 
 .search,
-.status-filter {
+.status-filter,
+.update-select {
   border: 1px solid #d1d5db;
   border-radius: 10px;
   padding: 9px 12px;
@@ -269,7 +353,11 @@ onMounted(() => {
 }
 
 .status-filter {
-  min-width: 160px;
+  min-width: 170px;
+}
+
+.update-select {
+  min-width: 140px;
 }
 
 .card {
@@ -319,6 +407,11 @@ small {
   color: #92400e;
 }
 
+.status-interviewed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 .status-accepted {
   background: #dcfce7;
   color: #166534;
@@ -327,34 +420,6 @@ small {
 .status-rejected {
   background: #fee2e2;
   color: #991b1b;
-}
-
-.actions-cell {
-  display: flex;
-  gap: 8px;
-}
-
-.btn {
-  border: none;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 7px 10px;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.accept {
-  background: #16a34a;
-}
-
-.reject {
-  background: #dc2626;
 }
 
 .error {
