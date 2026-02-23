@@ -131,8 +131,12 @@
         <h3>Account In Use</h3>
         <p class="modal-text">{{ sessionInUseMessage }}</p>
         <div class="modal-actions">
-          <button class="modal-btn primary" @click="closeSessionInUseModal">
-            OK
+          <button class="modal-btn cancel" @click="closeSessionInUseModal" :disabled="sessionInUseActionLoading">
+            Cancel
+          </button>
+          <button class="modal-btn primary" @click="forceLoginAfterSessionInUse" :disabled="sessionInUseActionLoading">
+            <span v-if="sessionInUseActionLoading" class="spinner"></span>
+            <span v-else>Log Out Other Device</span>
           </button>
         </div>
       </div>
@@ -166,6 +170,8 @@ const verificationLoading = ref(false)
 const pendingSessionKey = ref("")
 const showSessionInUseModal = ref(false)
 const sessionInUseMessage = ref("This account is currently in use on another device.")
+const sessionInUseActionLoading = ref(false)
+const sessionInUseNeedsCompanyVerification = ref(false)
 
 const pageLoading = ref(true)
 const isVisible = ref(false)
@@ -227,10 +233,22 @@ function finishLogin(data, normalizedEmail, acceptedSessionKey = "") {
   localStorage.setItem("activeSessionId", sessionId)
   localStorage.setItem("sessionUid", String(data.id || ""))
   localStorage.setItem("userCollection", accountType)
+  localStorage.setItem("userProfileCompleted", String(Boolean(data.profileCompleted)))
 
   Toastify({ text: "Login successful!", backgroundColor: "#2ecc71" }).showToast()
 
   if (role === "applicant") {
+    if (data.profileCompleted === false) {
+      router.replace("/applicant/onboarding")
+      return
+    }
+    const profileFillMarker = String(localStorage.getItem("newApplicantNeedsProfileFill") || "").trim().toLowerCase()
+    const loggedInEmail = String(data.email || normalizedEmail || "").trim().toLowerCase()
+    if (profileFillMarker && loggedInEmail && profileFillMarker === loggedInEmail) {
+      localStorage.removeItem("newApplicantNeedsProfileFill")
+      router.replace("/applicant/onboarding")
+      return
+    }
     router.replace("/applicant/job_list")
   } else if (role === "admin") {
     router.replace("/admin/dashboard")
@@ -249,6 +267,49 @@ function finishLogin(data, normalizedEmail, acceptedSessionKey = "") {
 
 function closeSessionInUseModal() {
   showSessionInUseModal.value = false
+  sessionInUseNeedsCompanyVerification.value = false
+}
+
+async function forceLoginAfterSessionInUse() {
+  const normalizedEmail = email.value.trim()
+  if (!normalizedEmail || !password.value) {
+    Toastify({ text: "Please enter your credentials again.", backgroundColor: "#e74c3c" }).showToast()
+    return
+  }
+
+  sessionInUseActionLoading.value = true
+  try {
+    const sessionKey = createSessionId()
+    pendingSessionKey.value = sessionKey
+    const payload = {
+      email: normalizedEmail,
+      password: password.value,
+      sessionKey,
+      forceLogin: true,
+    }
+    if (sessionInUseNeedsCompanyVerification.value && verificationCode.value.trim()) {
+      payload.verificationCode = verificationCode.value.trim()
+    }
+
+    const res = await api.post("/auth/login", payload)
+
+    if (res.data?.requiresCompanyAdminVerification) {
+      showSessionInUseModal.value = false
+      showCompanyVerificationModal.value = true
+      return
+    }
+
+    const acceptedSessionKey = String(res.data?.sessionKey || sessionKey)
+    showSessionInUseModal.value = false
+    sessionInUseNeedsCompanyVerification.value = false
+    finishLogin(res.data?.user || {}, normalizedEmail, acceptedSessionKey)
+    pendingSessionKey.value = ""
+  } catch (error) {
+    const message = error?.response?.data?.message || "Force login failed"
+    Toastify({ text: message, backgroundColor: "#e74c3c" }).showToast()
+  } finally {
+    sessionInUseActionLoading.value = false
+  }
 }
 
 const login = async () => {
@@ -286,6 +347,7 @@ const login = async () => {
     else if (error?.response?.status === 409) {
       message = error?.response?.data?.message || "This account is currently in use on another device."
       sessionInUseMessage.value = message
+      sessionInUseNeedsCompanyVerification.value = false
       showSessionInUseModal.value = true
     }
     else if (error?.response?.data?.message) message = error.response.data.message
@@ -330,9 +392,9 @@ async function confirmCompanyVerification() {
   } catch (error) {
     if (error?.response?.status === 409) {
       sessionInUseMessage.value = error?.response?.data?.message || "This account is currently in use on another device."
+      sessionInUseNeedsCompanyVerification.value = true
       showSessionInUseModal.value = true
       showCompanyVerificationModal.value = false
-      pendingSessionKey.value = ""
     } else {
       const message = error?.response?.data?.message || "Verification failed"
       Toastify({ text: message, backgroundColor: "#e74c3c" }).showToast()

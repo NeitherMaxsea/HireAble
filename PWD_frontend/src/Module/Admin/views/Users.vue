@@ -132,9 +132,37 @@
           <p><strong>Role:</strong> {{ selectedUser.roleLabel }}</p>
           <p><strong>Status:</strong> {{ selectedUser.statusLabel }}</p>
           <p><strong>Laravel Sync:</strong> {{ selectedUser.syncLabel }}</p>
+          <p v-if="selectedUser.role === 'applicant'"><strong>Profile Completed:</strong> {{ selectedUser.profileCompletedLabel }}</p>
           <p><strong>Last Login:</strong> {{ selectedUser.lastLoginLabel }}</p>
           <p><strong>Last Logout:</strong> {{ selectedUser.lastLogoutLabel }}</p>
           <p><strong>Created:</strong> {{ selectedUser.createdLabel }}</p>
+
+          <div v-if="selectedUser.role === 'applicant'" class="detail-section">
+            <h4>Applicant Information</h4>
+
+            <div v-if="selectedUser.profilePhotoUrl" class="photo-preview-row">
+              <img :src="selectedUser.profilePhotoUrl" alt="Applicant profile" class="photo-preview" />
+              <div class="photo-preview-meta">
+                <p><strong>Profile Photo:</strong> Uploaded</p>
+                <p class="muted-text">{{ selectedUser.profilePhotoPath || "From onboarding/profile data" }}</p>
+              </div>
+            </div>
+
+            <div class="detail-grid">
+              <p><strong>Disability:</strong> {{ selectedUser.disability || "-" }}</p>
+              <p><strong>Contact:</strong> {{ selectedUser.contactNumber || "-" }}</p>
+              <p><strong>Sex at Birth:</strong> {{ selectedUser.sexAtBirth || "-" }}</p>
+              <p><strong>Date of Birth:</strong> {{ selectedUser.dateOfBirth || "-" }}</p>
+              <p><strong>Academic Level:</strong> {{ selectedUser.academicLevel || "-" }}</p>
+              <p><strong>Preferred Role:</strong> {{ selectedUser.preferredRole || "-" }}</p>
+              <p><strong>Years of Experience:</strong> {{ selectedUser.yearsOfExperience || "-" }}</p>
+              <p><strong>Work Mode:</strong> {{ selectedUser.workMode || "-" }}</p>
+              <p><strong>Address:</strong> {{ selectedUser.addressLabel || "-" }}</p>
+              <p><strong>Preferred Location:</strong> {{ selectedUser.preferredLocationLabel || "-" }}</p>
+              <p><strong>Salary Range:</strong> {{ selectedUser.salaryRangeLabel || "-" }}</p>
+              <p><strong>PWD ID Number:</strong> {{ selectedUser.pwdIdNumber || "-" }}</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -581,6 +609,54 @@ function normalizeUser(id, data, collectionName = "users") {
   const lastLoginAtMs = toMillis(data.lastLoginAt)
   const lastLogoutAtMs = toMillis(data.lastLogoutAt)
   const syncState = resolveSyncState(data)
+  const onboardingData = normalizeObject(data.onboardingData)
+  const onboardingBasicInfo = normalizeObject(data.onboardingBasicInfo)
+  const mergedInfo = {
+    ...onboardingData,
+    ...onboardingBasicInfo,
+    ...(normalizeObject(onboardingData.basicInfo) || {}),
+    ...(normalizeObject(onboardingData.accountSetup) || {})
+  }
+  const photoURL = firstNonEmpty(
+    data.photoURL,
+    data.photoUrl,
+    data.profilePhotoURL,
+    data.profilePhotoUrl,
+    mergedInfo.profilePhotoURL,
+    mergedInfo.profilePhotoUrl,
+    mergedInfo.profilePictureURL,
+    mergedInfo.profilePictureUrl
+  )
+  const photoPath = firstNonEmpty(
+    data.photoPath,
+    data.profilePhotoPath,
+    mergedInfo.profilePhotoPath,
+    mergedInfo.profilePicturePath
+  )
+  const addressProvince = firstNonEmpty(mergedInfo.addressProvince, mergedInfo.province)
+  const addressCity = firstNonEmpty(mergedInfo.addressCity, mergedInfo.city)
+  const preferredProvince = firstNonEmpty(mergedInfo.preferredProvince)
+  const preferredCity = firstNonEmpty(mergedInfo.preferredCity)
+  const salaryMin = firstNonEmpty(
+    mergedInfo.salaryMin,
+    mergedInfo.minSalary,
+    mergedInfo.monthlySalaryMin,
+    mergedInfo.salary_min
+  )
+  const salaryMax = firstNonEmpty(
+    mergedInfo.salaryMax,
+    mergedInfo.maxSalary,
+    mergedInfo.monthlySalaryMax,
+    mergedInfo.salary_max
+  )
+  const salaryRangeLabel = salaryMin || salaryMax ? `${salaryMin || "-"} - ${salaryMax || "-"}` : "-"
+  const addressLabel = [addressCity, addressProvince].filter(Boolean).join(", ")
+  const preferredLocationLabel = [preferredCity, preferredProvince].filter(Boolean).join(", ")
+  const profileCompleted = typeof data.profileCompleted === "boolean"
+    ? data.profileCompleted
+    : typeof data.profile_completed === "boolean"
+      ? data.profile_completed
+      : null
 
   return {
     id,
@@ -599,6 +675,28 @@ function normalizeUser(id, data, collectionName = "users") {
     syncState,
     syncLabel: syncState === "synced" ? "Synced" : "Missing Link",
     displayName: data.username || data.name || data.email || "Unknown User",
+    profileCompleted,
+    profileCompletedLabel: profileCompleted === null ? "-" : profileCompleted ? "Yes" : "No",
+    disability: firstNonEmpty(mergedInfo.disability, mergedInfo.pwdCategory, data.disability),
+    contactNumber: firstNonEmpty(
+      mergedInfo.mobilePhoneNumber,
+      mergedInfo.mobileNumber,
+      mergedInfo.contactNumber,
+      mergedInfo.contact,
+      data.contact
+    ),
+    sexAtBirth: firstNonEmpty(mergedInfo.sexAtBirth, mergedInfo.sex),
+    dateOfBirth: firstNonEmpty(mergedInfo.dateOfBirth, mergedInfo.birthDate, mergedInfo.dob),
+    academicLevel: firstNonEmpty(mergedInfo.academicLevel, mergedInfo.education, mergedInfo.educationalAttainment),
+    preferredRole: firstNonEmpty(mergedInfo.preferredRole, mergedInfo.rolePreference),
+    yearsOfExperience: firstNonEmpty(mergedInfo.yearsOfExperience, mergedInfo.experienceYears),
+    workMode: firstNonEmpty(mergedInfo.workMode, mergedInfo.preferredWorkMode),
+    addressLabel,
+    preferredLocationLabel,
+    salaryRangeLabel,
+    pwdIdNumber: firstNonEmpty(mergedInfo.pwdIdNumber, mergedInfo.pwdIDNumber, mergedInfo.pwdIdNo),
+    profilePhotoUrl: photoURL,
+    profilePhotoPath: photoPath,
     lastLoginAtMs,
     lastLoginLabel: lastLoginAtMs ? formatDateTime(lastLoginAtMs) : "-",
     lastLogoutAtMs,
@@ -606,6 +704,29 @@ function normalizeUser(id, data, collectionName = "users") {
     createdAtMs,
     createdLabel: createdAtMs ? formatDate(createdAtMs) : "-"
   }
+}
+
+function normalizeObject(value) {
+  if (!value) return {}
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === "object" ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  return typeof value === "object" ? value : {}
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue
+    const text = String(value).trim()
+    if (!text) continue
+    return text
+  }
+  return ""
 }
 
 function roleMatchesFilter(role, filter) {
@@ -940,6 +1061,53 @@ th {
   gap: 8px;
 }
 
+.detail-section {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.detail-section h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.detail-grid p {
+  margin: 0;
+}
+
+.photo-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.photo-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid #cbd5e1;
+}
+
+.photo-preview-meta p {
+  margin: 0;
+}
+
+.muted-text {
+  color: #64748b;
+  font-size: 12px;
+  word-break: break-all;
+}
+
 .modal-body label {
   font-size: 12px;
   color: #64748b;
@@ -951,6 +1119,16 @@ th {
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   padding: 0 10px;
+}
+
+@media (max-width: 640px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .photo-preview-row {
+    align-items: flex-start;
+  }
 }
 
 .hint {

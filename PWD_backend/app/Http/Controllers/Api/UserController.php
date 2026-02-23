@@ -27,6 +27,8 @@ class UserController extends Controller
             'companyIndustry' => ['nullable', 'string', 'max:255'],
             'position' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:255'],
+            'profileCompleted' => ['nullable', 'boolean'],
+            'onboardingData' => ['nullable', 'array'],
             'activeSessionKey' => ['nullable', 'string', 'max:191'],
             'sessionLastSeenAt' => ['nullable'],
         ]);
@@ -64,6 +66,8 @@ class UserController extends Controller
             'company_industry' => $payload['companyIndustry'] ?? null,
             'position' => $payload['position'] ?? null,
             'department' => $payload['department'] ?? null,
+            'profile_completed' => array_key_exists('profileCompleted', $payload) ? (bool) $payload['profileCompleted'] : true,
+            'onboarding_data' => $payload['onboardingData'] ?? null,
             'last_login_at' => null,
             'active_session_key' => $payload['activeSessionKey'] ?? null,
             'session_last_seen_at' => $payload['sessionLastSeenAt'] ?? null,
@@ -125,6 +129,8 @@ class UserController extends Controller
             'passwordResetRequestedAt' => ['nullable'],
             'activeSessionKey' => ['nullable', 'string', 'max:191'],
             'sessionLastSeenAt' => ['nullable'],
+            'profileCompleted' => ['nullable', 'boolean'],
+            'onboardingData' => ['nullable', 'array'],
         ]);
 
         if (array_key_exists('role', $payload) && strtolower(trim((string) ($payload['role'] ?? ''))) === 'admin') {
@@ -152,6 +158,12 @@ class UserController extends Controller
             'company_industry' => $payload['companyIndustry'] ?? $user->company_industry,
             'position' => $payload['position'] ?? $user->position,
             'department' => $payload['department'] ?? $user->department,
+            'profile_completed' => array_key_exists('profileCompleted', $payload)
+                ? (bool) $payload['profileCompleted']
+                : $user->profile_completed,
+            'onboarding_data' => array_key_exists('onboardingData', $payload)
+                ? $payload['onboardingData']
+                : $user->onboarding_data,
             'last_login_at' => $payload['lastLoginAt'] ?? $user->last_login_at,
             'last_logout_at' => $payload['lastLogoutAt'] ?? $user->last_logout_at,
             'password_reset_requested_at' => $payload['passwordResetRequestedAt'] ?? $user->password_reset_requested_at,
@@ -218,6 +230,8 @@ class UserController extends Controller
             'companyIndustry' => $user->company_industry,
             'position' => $user->position,
             'department' => $user->department,
+            'profileCompleted' => (bool) ($user->profile_completed ?? false),
+            'onboardingData' => $user->onboarding_data,
             'lastLoginAt' => $user->last_login_at,
             'lastLogoutAt' => $user->last_logout_at,
             'passwordResetRequestedAt' => $user->password_reset_requested_at,

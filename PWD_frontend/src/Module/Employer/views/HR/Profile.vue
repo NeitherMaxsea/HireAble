@@ -465,10 +465,28 @@ const saveProfile = async () => {
       photoPath: form.value.photoPath || "",
     }
 
+    const backendPayload = {
+      ...payload,
+      profileCompleted: isApplicant.value
+        ? Boolean(
+            payload.username.trim() &&
+            (profile.value.email || "").trim() &&
+            (payload.contact || "").trim()
+          )
+        : true,
+    }
+
     try {
       await updateDoc(doc(db, "users", user.uid), payload)
     } catch {
       await updateDoc(doc(db, "Users", user.uid), payload)
+    }
+
+    try {
+      await api.put(`/users/${user.uid}`, backendPayload)
+      localStorage.setItem("userProfileCompleted", String(Boolean(backendPayload.profileCompleted)))
+    } catch {
+      // Keep Firestore profile save successful even if backend sync fails.
     }
 
     profile.value.username = payload.username || profile.value.username

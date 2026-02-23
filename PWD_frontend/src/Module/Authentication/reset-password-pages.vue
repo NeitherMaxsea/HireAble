@@ -27,21 +27,39 @@
         <!-- NEW PASSWORD -->
         <div class="form-group password-group">
           <label>New Password</label>
-          <input
-            :type="showPassword ? 'text' : 'password'"
-            v-model="password"
-            placeholder="Enter new password"
-          />
+          <div class="password-wrapper icon-group">
+            <i class="bi bi-lock-fill input-icon"></i>
+            <input
+              :type="showPassword ? 'text' : 'password'"
+              v-model="password"
+              placeholder="Enter new password"
+              autocomplete="new-password"
+            />
+            <span v-if="password" class="toggle-eye" @click="showPassword = !showPassword">
+              <i :class="showPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
+            </span>
+          </div>
         </div>
 
         <!-- CONFIRM PASSWORD -->
         <div class="form-group password-group">
           <label>Confirm Password</label>
-          <input
-            :type="showConfirmPassword ? 'text' : 'password'"
-            v-model="confirmPassword"
-            placeholder="Confirm new password"
-          />
+          <div class="password-wrapper icon-group">
+            <i class="bi bi-shield-lock-fill input-icon"></i>
+            <input
+              :type="showConfirmPassword ? 'text' : 'password'"
+              v-model="confirmPassword"
+              placeholder="Confirm new password"
+              autocomplete="new-password"
+            />
+            <span
+              v-if="confirmPassword"
+              class="toggle-eye"
+              @click="showConfirmPassword = !showConfirmPassword"
+            >
+              <i :class="showConfirmPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
+            </span>
+          </div>
         </div>
 
         <!-- RESET BUTTON -->
@@ -135,3 +153,73 @@ const goLogin = () => {
   router.push("/login")
 }
 </script>
+
+<style scoped>
+.password-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.icon-group {
+  position: relative;
+}
+
+.input-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.password-wrapper input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid #d4dde7;
+  border-radius: 11px;
+  background: #f9fbfd;
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding-left: 45px;
+  padding-right: 45px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.password-wrapper input::placeholder {
+  color: #9ca3af;
+}
+
+.password-wrapper input:focus {
+  outline: none;
+  border-color: #1f7a3f;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(31, 122, 63, 0.14);
+}
+
+.toggle-eye {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-eye i {
+  color: #64748b;
+  font-size: 15px;
+}
+
+.toggle-eye:hover i {
+  color: #0f172a;
+}
+</style>

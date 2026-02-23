@@ -27,11 +27,15 @@
         <!-- EMAIL -->
         <div class="form-group">
           <label>Email</label>
-          <input
-            type="email"
-            placeholder="Enter your email"
-            v-model="email"
-          />
+          <div class="input-wrapper icon-group">
+            <i class="bi bi-envelope-fill input-icon"></i>
+            <input
+              type="email"
+              placeholder="Enter your email"
+              v-model="email"
+              autocomplete="email"
+            />
+          </div>
         </div>
 
         <!-- SEND BUTTON -->
@@ -117,3 +121,53 @@ const goLogin = () => {
   router.push("/login")
 }
 </script>
+
+<style scoped>
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.icon-group {
+  position: relative;
+}
+
+.input-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.icon-group input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid #d4dde7;
+  border-radius: 11px;
+  background: #f9fbfd;
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding-left: 45px;
+  padding-right: 14px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.icon-group input::placeholder {
+  color: #9ca3af;
+}
+
+.icon-group input:focus {
+  outline: none;
+  border-color: #1f7a3f;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(31, 122, 63, 0.14);
+}
+</style>

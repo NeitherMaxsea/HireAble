@@ -60,6 +60,23 @@
         </ul>
         <p v-else class="panel-empty">No activity yet.</p>
       </div>
+
+      <div class="panel visitors-panel">
+        <h3>Recent Visitors</h3>
+        <ul v-if="recentVisitors.length" class="visitor-list">
+          <li v-for="visitor in recentVisitors" :key="visitor.id">
+            <div class="visitor-main">
+              <strong>{{ visitor.name }}</strong>
+              <span class="visitor-meta">{{ visitor.email || "No email" }}</span>
+            </div>
+            <div class="visitor-side">
+              <span class="role-pill" :class="visitor.role">{{ visitor.roleLabel }}</span>
+              <span class="visit-time">{{ formatDateTime(visitor.visitAtMs) }}</span>
+            </div>
+          </li>
+        </ul>
+        <p v-else class="panel-empty">No visitor records yet.</p>
+      </div>
     </div>
   </div>
 </template>
@@ -132,6 +149,32 @@ const systemActivity = computed(() => {
   return [...userActivity, ...jobActivity, ...appActivity]
     .filter((item) => item.timestampMs > 0)
     .sort((a, b) => b.timestampMs - a.timestampMs)
+    .slice(0, 10)
+})
+
+const recentVisitors = computed(() => {
+  return combinedUsers.value
+    .map((user) => {
+      const visitAtMs = toMillis(user.lastSeenAt || user.lastLoginAtMs)
+      const role = String(user.role || "").toLowerCase()
+      return {
+        id: `${user.uid || user.email || user.name}-${visitAtMs}`,
+        name: user.name || "Unknown User",
+        email: user.email || "",
+        role,
+        roleLabel:
+          role === "applicant"
+            ? "Applicant"
+            : role === "company_admin"
+              ? "Company Admin"
+              : role === "employer"
+                ? "Employer"
+                : "User",
+        visitAtMs,
+      }
+    })
+    .filter((user) => user.visitAtMs > 0)
+    .sort((a, b) => b.visitAtMs - a.visitAtMs)
     .slice(0, 10)
 })
 
@@ -406,6 +449,10 @@ function dedupeUsers(users) {
   margin-bottom: 15px;
 }
 
+.visitors-panel {
+  grid-column: 1 / -1;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -456,6 +503,73 @@ td {
   white-space: nowrap;
 }
 
+.visitor-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.visitor-list li {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.visitor-main {
+  min-width: 0;
+}
+
+.visitor-main strong {
+  display: block;
+  color: #0f172a;
+}
+
+.visitor-meta {
+  color: #64748b;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.visitor-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.role-pill.applicant {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.role-pill.employer,
+.role-pill.company_admin {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.visit-time {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .panel-empty {
   margin: 0;
   color: #64748b;
@@ -466,6 +580,17 @@ td {
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .visitor-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .visitor-side {
+    justify-content: flex-start;
   }
 }
 </style>

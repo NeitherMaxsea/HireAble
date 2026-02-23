@@ -56,6 +56,58 @@ class AuthController extends Controller
             $companyId = 'CMP-' . strtoupper(Str::random(8));
         }
 
+        if ($this->shouldBypassOtpForTestEmail($email)) {
+            $existing = User::where('email', $email)->first();
+            if (!$existing) {
+                $companyLoginCode = $isCompanyAdmin ? (string) random_int(100000, 999999) : null;
+
+                $created = User::create([
+                    'name' => (string) $payload['name'],
+                    'username' => (string) $payload['name'],
+                    'email' => $email,
+                    'password' => Hash::make((string) $payload['password']),
+                    'role' => $normalizedRole ?: 'applicant',
+                    'status' => 'active',
+                    'is_active' => true,
+                    'contact' => $payload['contact'] ?? null,
+                    'disability' => $payload['disability'] ?? null,
+                    'company_id' => $companyId,
+                    'company_name' => $companyName,
+                    'company_address' => $payload['companyAddress'] ?? null,
+                    'company_industry' => $payload['companyIndustry'] ?? null,
+                    'company_login_code' => $isCompanyAdmin ? Hash::make((string) $companyLoginCode) : null,
+                    'position' => $payload['position'] ?? null,
+                    'department' => $payload['department'] ?? null,
+                    'profile_completed' => $normalizedRole !== 'applicant',
+                    'last_login_at' => now(),
+                ]);
+
+                if ($isCompanyAdmin && $companyLoginCode) {
+                    try {
+                        $this->mailer->sendPlainText(
+                            $created->email,
+                            'PWD Portal Company Account Created',
+                            "Your company admin account has been created successfully.\n\nYour company admin verification code is: {$companyLoginCode}\n\nUse this code together with your email and password when logging in.\nNo OTP will be sent during login."
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning('Company registration notice email failed (test bypass)', [
+                            'email' => $created->email,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+
+            DB::table('pending_registrations')->where('email', $email)->delete();
+            DB::table('otp_codes')->where('email', $email)->delete();
+
+            return response()->json([
+                'message' => 'Registered (test account). OTP skipped.',
+                'otpSent' => false,
+                'otpRequired' => false,
+            ], 201);
+        }
+
         DB::table('pending_registrations')->updateOrInsert(
             ['email' => $email],
             [
@@ -90,6 +142,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => $otpSent ? 'Registered. OTP sent to your email.' : 'Registered. OTP sending failed, please resend.',
             'otpSent' => $otpSent,
+            'otpRequired' => true,
         ], 201);
     }
 
@@ -100,7 +153,9 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
             'verificationCode' => ['nullable', 'digits:6'],
             'sessionKey' => ['nullable', 'string', 'max:191'],
+            'forceLogin' => ['nullable', 'boolean'],
         ]);
+        $forceLogin = (bool) ($payload['forceLogin'] ?? false);
 
         $loginValue = strtolower(trim((string) ($payload['email'] ?? '')));
         if ($loginValue === '') {
@@ -126,10 +181,15 @@ class AuthController extends Controller
             }
 
             if ($this->isSessionInUseByAnotherDevice($admin, $sessionKey)) {
-                return response()->json([
-                    'message' => 'This account is currently in use on another device. Please try again later.',
-                    'code' => 'ACCOUNT_IN_USE',
-                ], 409);
+                if (!$forceLogin) {
+                    return response()->json([
+                        'message' => 'This account is currently in use on another device. Please try again later.',
+                        'code' => 'ACCOUNT_IN_USE',
+                    ], 409);
+                }
+
+                $admin->active_session_key = null;
+                $admin->session_last_seen_at = null;
             }
 
             $admin->last_login_at = now();
@@ -178,10 +238,15 @@ class AuthController extends Controller
         }
 
         if ($this->isSessionInUseByAnotherDevice($user, $sessionKey)) {
-            return response()->json([
-                'message' => 'This account is currently in use on another device. Please try again later.',
-                'code' => 'ACCOUNT_IN_USE',
-            ], 409);
+            if (!$forceLogin) {
+                return response()->json([
+                    'message' => 'This account is currently in use on another device. Please try again later.',
+                    'code' => 'ACCOUNT_IN_USE',
+                ], 409);
+            }
+
+            $user->active_session_key = null;
+            $user->session_last_seen_at = null;
         }
 
         $user->last_login_at = now();
@@ -365,6 +430,7 @@ class AuthController extends Controller
                     'company_login_code' => $isCompanyAdmin ? Hash::make((string) $companyLoginCode) : null,
                     'position' => $pending->position,
                     'department' => $pending->department,
+                    'profile_completed' => $pendingRole !== 'applicant',
                     'last_login_at' => now(),
                 ]);
 
@@ -465,6 +531,7 @@ class AuthController extends Controller
             'companyIndustry' => $isAdmin ? null : $user->company_industry,
             'position' => $isAdmin ? null : $user->position,
             'department' => $isAdmin ? null : $user->department,
+            'profileCompleted' => $isAdmin ? true : (bool) ($user->profile_completed ?? false),
             'hasActiveSession' => !empty($user->active_session_key),
             'sessionLastSeenAt' => $user->session_last_seen_at,
             'accountType' => $isAdmin ? 'admins' : 'users',
@@ -594,5 +661,18 @@ class AuthController extends Controller
         ]);
 
         $this->mailer->sendOtpEmail($email, $otp, $recipientLabel);
+    }
+
+    private function shouldBypassOtpForTestEmail(string $email): bool
+    {
+        if (!app()->environment(['local', 'development', 'testing'])) {
+            return false;
+        }
+
+        $normalized = strtolower(trim($email));
+
+        return str_contains($normalized, '@test.local')
+            || str_contains($normalized, '@example.com')
+            || str_contains($normalized, '+test@');
     }
 }

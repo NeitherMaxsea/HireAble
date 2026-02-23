@@ -267,13 +267,25 @@ export default {
         const normalizedEmail = this.email.trim().toLowerCase();
         localStorage.removeItem("selectedRole");
         localStorage.setItem("pendingOtpEmail", normalizedEmail);
+        if (!this.isEmployerRegistration) {
+          localStorage.setItem("newApplicantNeedsProfileFill", normalizedEmail);
+        } else {
+          localStorage.removeItem("newApplicantNeedsProfileFill");
+        }
         const otpSent = res?.data?.otpSent !== false;
+        const otpRequired = res?.data?.otpRequired !== false;
         Toastify({
-          text: otpSent
+          text: !otpRequired
+            ? "Registration successful. Test account created without OTP."
+            : otpSent
             ? "Registration successful. OTP sent to your email."
             : "Registered, but OTP was not sent. Please resend OTP.",
-          backgroundColor: otpSent ? "#2ecc71" : "#f59e0b",
+          backgroundColor: !otpRequired || otpSent ? "#2ecc71" : "#f59e0b",
         }).showToast();
+        if (!otpRequired) {
+          this.$router.replace({ path: "/login", query: { force: "1" } });
+          return;
+        }
         this.$router.replace({
           path: "/auth/otp",
           query: otpSent

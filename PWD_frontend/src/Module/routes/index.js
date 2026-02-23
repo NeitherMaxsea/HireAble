@@ -57,6 +57,7 @@ import CompanyAdminLogs from "@/Module/CompanyAdmin/views/Logs.vue"
 import ApplicantLayout from "@/Module/Applicant/views/layout/ApplicantLayout.vue"
 import ApplicantDashboard from "@/Module/Applicant/views/job_list.vue"
 import ApplicantTrainingProgress from "@/Module/Applicant/views/training_progress.vue"
+import ApplicantOnboarding from "@/Module/Applicant/views/onboarding.vue"
 
 // Auth helper function
 function isUserAuthenticated() {
@@ -72,6 +73,12 @@ function getUserRole() {
   const role = localStorage.getItem("userRole")
   if (!role) return null
   return normalizeAuthRole(role)
+}
+
+function isApplicantProfileCompleted() {
+  const raw = localStorage.getItem("userProfileCompleted")
+  if (raw == null) return true
+  return String(raw).toLowerCase() === "true"
 }
 
 function normalizeAuthRole(role) {
@@ -485,6 +492,17 @@ const routes = [
 
   // ================= COMPANY ADMIN =================
   {
+    path: "/applicant/onboarding",
+    name: "ApplicantOnboarding",
+    component: ApplicantOnboarding,
+    meta: {
+      title: "PWD Job Portal | Applicant Onboarding",
+      requiresAuth: true,
+      requiredRole: "applicant",
+    },
+  },
+
+  {
     path: "/company-admin",
     component: CompanyAdminLayout,
     meta: { requiresAuth: true, requiredRole: "company_admin" },
@@ -596,6 +614,12 @@ router.beforeEach((to, from, next) => {
     } else if (!isAllowedRole(requiredRole, userRole)) {
       // User logged in but doesn't have required role
       next({ name: "LandingPage" })
+    } else if (
+      normalizeAuthRole(userRole) === "applicant" &&
+      !isApplicantProfileCompleted() &&
+      to.name !== "ApplicantOnboarding"
+    ) {
+      next({ name: "ApplicantOnboarding" })
     } else {
       // User is authenticated and has required role
       next()

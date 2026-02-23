@@ -71,11 +71,27 @@
         </span>
       </button>
 
-      <button class="logout" @click="logout">
+      <button class="logout" @click="showLogoutConfirm = true">
         <i class="bi bi-box-arrow-right icon"></i>
         <span v-if="!isCollapsed">Logout</span>
       </button>
 
+    </div>
+
+    <div v-if="showLogoutConfirm" class="logout-modal-backdrop" @click.self="showLogoutConfirm = false">
+      <div class="logout-modal">
+        <h3>Log out?</h3>
+        <p>Are you sure you want to log out?</p>
+        <div class="logout-modal-actions">
+          <button class="logout-modal-btn cancel" @click="showLogoutConfirm = false" :disabled="logoutLoading">
+            No
+          </button>
+          <button class="logout-modal-btn confirm" @click="logout" :disabled="logoutLoading">
+            <span v-if="logoutLoading">Logging out...</span>
+            <span v-else>Yes</span>
+          </button>
+        </div>
+      </div>
     </div>
 
   </aside>
@@ -100,6 +116,8 @@ defineProps({
 const emit = defineEmits(["close-mobile"])
 const router = useRouter()
 const isCollapsed = ref(false)
+const showLogoutConfirm = ref(false)
+const logoutLoading = ref(false)
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
@@ -110,46 +128,52 @@ const closeMobile = () => {
 }
 
 const logout = async () => {
-  const uid = auth.currentUser?.uid
-  if (uid) {
-    const payload = {
-      status: "inactive",
-      isActive: false,
-      lastLogoutAt: serverTimestamp(),
-      lastSeenAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }
-    try {
-      await updateDoc(doc(db, "users", uid), payload)
-    } catch {
+  logoutLoading.value = true
+  try {
+    const uid = auth.currentUser?.uid
+    if (uid) {
+      const payload = {
+        status: "inactive",
+        isActive: false,
+        lastLogoutAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }
       try {
-        await updateDoc(doc(db, "Users", uid), payload)
+        await updateDoc(doc(db, "users", uid), payload)
       } catch {
-        // continue logout even if Laravel write fails
+        try {
+          await updateDoc(doc(db, "Users", uid), payload)
+        } catch {
+          // continue logout even if Laravel write fails
+        }
       }
     }
-  }
 
-  try {
-    await signOut(auth)
-  } catch {
-    // continue local logout even if auth signout request fails
-  }
-
-  localStorage.clear()
-  emit("close-mobile")
-  await router.replace({ path: "/login", query: { force: "1" } })
-  Toastify({
-    text: "Your account has been logged out.",
-    gravity: "top",
-    position: "right",
-    duration: 3000,
-    close: true,
-    stopOnFocus: true,
-    style: {
-      background: "#0f172a"
+    try {
+      await signOut(auth)
+    } catch {
+      // continue local logout even if auth signout request fails
     }
-  }).showToast()
+
+    localStorage.clear()
+    showLogoutConfirm.value = false
+    emit("close-mobile")
+    await router.replace({ path: "/login", query: { force: "1" } })
+    Toastify({
+      text: "Your account has been logged out.",
+      gravity: "top",
+      position: "right",
+      duration: 3000,
+      close: true,
+      stopOnFocus: true,
+      style: {
+        background: "#0f172a"
+      }
+    }).showToast()
+  } finally {
+    logoutLoading.value = false
+  }
 }
 </script>
 
@@ -262,6 +286,71 @@ const logout = async () => {
 
 .logout:hover {
   background: rgba(239,68,68,0.2);
+}
+
+.logout-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.logout-modal {
+  width: min(360px, 100%);
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  border: 1px solid #dbe4ee;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.22);
+  padding: 16px;
+}
+
+.logout-modal h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.logout-modal p {
+  margin: 8px 0 0;
+  color: #475569;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.logout-modal-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.logout-modal-btn {
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.logout-modal-btn.cancel {
+  background: #ffffff;
+  border-color: #dbe4ee;
+  color: #334155;
+}
+
+.logout-modal-btn.confirm {
+  background: #b91c1c;
+  color: #ffffff;
+}
+
+.logout-modal-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1024px) {
