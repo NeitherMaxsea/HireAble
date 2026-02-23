@@ -6,27 +6,19 @@
       { collapsed: collapsed }
     ]"
   >
-
-    <!-- BRAND -->
     <div class="brand">
-      <div class="brand-text">
-        <div class="company-name" :title="companyName">{{ companyName }}</div>
-        <div class="department-name">Human Resource</div>
-      </div>
+      <img src="@/assets/whitelogo.png" class="logo" alt="HireAble" />
 
       <button class="collapse-btn" @click="toggleSidebar">
         <i class="bi bi-list"></i>
       </button>
     </div>
 
-    <!-- NAV -->
     <nav class="nav">
-
-      <!-- DASHBOARD -->
       <router-link
-        to="/employer/HR/dashboard"
+        to="/employer/finance/dashboard"
         class="nav-link"
-        :class="{ active: route.path.includes('/dashboard') }"
+        :class="{ active: route.path.includes('/employer/finance/dashboard') }"
         @mouseenter="tooltip='Dashboard'"
         @mouseleave="tooltip=''"
       >
@@ -40,165 +32,25 @@
         </span>
       </router-link>
 
-      <!-- JOB MANAGEMENT -->
-      <div
-        class="nav-group"
-        @mouseenter="tooltip='Job Management'"
-        @mouseleave="tooltip=''"
-      >
-
-        <div
-          class="nav-parent"
-          :class="{ active: route.path.includes('/job-management') }"
-          @click="handleJobClick"
-        >
-          <span class="nav-left">
-            <i class="bi bi-briefcase"></i>
-            <span v-if="!collapsed">Job Management</span>
-          </span>
-
-          <span v-if="!collapsed">{{ showJobs ? "▾" : "▸" }}</span>
-        </div>
-
-        <!-- TOOLTIP -->
-        <span v-if="collapsed && tooltip==='Job Management'" class="tooltip">
-          Job Management
-        </span>
-
-        <!-- DROPDOWN -->
-        <transition name="slide">
-          <div v-show="showJobs && !collapsed" class="nav-children">
-
-            <router-link
-              to="/employer/HR/job-management/job-post"
-              class="nav-child"
-              :class="{ active: route.path.includes('/job-post') }"
-            >
-              <i class="bi bi-plus-square"></i>
-              Job Post
-            </router-link>
-
-            <router-link
-              to="/employer/HR/job-management/job-list"
-              class="nav-child"
-              :class="{ active: route.path.includes('/job-list') }"
-            >
-              <i class="bi bi-list-task"></i>
-              Job List
-            </router-link>
-
-          </div>
-        </transition>
-
-      </div>
-
-      <!-- APPLICANT MANAGEMENT -->
-      <div
-        class="nav-group"
-        @mouseenter="tooltip='Applicant Management'"
-        @mouseleave="tooltip=''"
-      >
-        <div
-          class="nav-parent"
-          :class="{ active: route.path.includes('/applicant-lists') || route.path.includes('/application-status-tracking') }"
-          @click="handleApplicantClick"
-        >
-          <span class="nav-left">
-            <i class="bi bi-person-lines-fill"></i>
-            <span v-if="!collapsed">Applicant Management</span>
-          </span>
-
-          <span v-if="!collapsed">{{ showApplicants ? "▾" : "▸" }}</span>
-        </div>
-
-        <span v-if="collapsed && tooltip==='Applicant Management'" class="tooltip">
-          Applicant Management
-        </span>
-
-        <transition name="slide">
-          <div v-show="showApplicants && !collapsed" class="nav-children">
-            <router-link
-              to="/employer/HR/applicant-lists"
-              class="nav-child"
-              :class="{ active: route.path.includes('/applicant-lists') }"
-            >
-              <i class="bi bi-person-lines-fill"></i>
-              Applicant Lists
-            </router-link>
-
-            <router-link
-              to="/employer/HR/application-status-tracking"
-              class="nav-child"
-              :class="{ active: route.path.includes('/application-status-tracking') }"
-            >
-              <i class="bi bi-ui-checks-grid"></i>
-              Application Status
-            </router-link>
-          </div>
-        </transition>
-      </div>
-
       <router-link
-        to="/employer/HR/interview-management"
+        to="/employer/finance/job-approval"
         class="nav-link"
-        :class="{ active: route.path.includes('/interview-management') }"
-        @mouseenter="tooltip='Interview Management'"
+        :class="{ active: route.path.includes('/employer/finance/job-approval') }"
+        @mouseenter="tooltip='Job Approval'"
         @mouseleave="tooltip=''"
       >
         <span class="nav-left">
-          <i class="bi bi-calendar2-check"></i>
-          <span v-if="!collapsed">Interview Management</span>
+          <i class="bi bi-patch-check"></i>
+          <span v-if="!collapsed">Job Approval</span>
         </span>
 
-        <span v-if="collapsed && tooltip==='Interview Management'" class="tooltip">
-          Interview Management
-        </span>
-      </router-link>
-
-      <router-link
-        to="/employer/HR/add-employee"
-        class="nav-link"
-        :class="{ active: route.path.includes('/add-employee') }"
-        @mouseenter="tooltip='Add Employee'"
-        @mouseleave="tooltip=''"
-      >
-        <span class="nav-left">
-          <i class="bi bi-person-plus"></i>
-          <span v-if="!collapsed">Add Employee</span>
-        </span>
-
-        <span v-if="collapsed && tooltip==='Add Employee'" class="tooltip">
-          Add Employee
+        <span v-if="collapsed && tooltip==='Job Approval'" class="tooltip">
+          Job Approval
         </span>
       </router-link>
-
-      <!-- EMPLOYER RECORDS -->
-      <router-link
-        to="/employer/HR/employer-records"
-        class="nav-link"
-        :class="{ active: route.path.includes('/employer-records') }"
-        @mouseenter="tooltip='Employer Records'"
-        @mouseleave="tooltip=''"
-      >
-        <span class="nav-left">
-          <i class="bi bi-people"></i>
-          <span v-if="!collapsed">Employer Records</span>
-        </span>
-
-        <span v-if="collapsed && tooltip==='Employer Records'" class="tooltip">
-          Employer Records
-        </span>
-      </router-link>
-
-      <!-- ATTENDANCE MANAGEMENT -->
-      
-        
-
     </nav>
 
-    <!-- PROFILE -->
     <div class="profile-wrapper" ref="profileRef">
-
       <div
         class="profile"
         @click.stop="toggleMenu"
@@ -219,7 +71,6 @@
         </span>
       </div>
 
-      <!-- DROPDOWN -->
       <transition name="fade">
         <div v-if="showMenu" class="profile-menu">
           <div class="profile-menu-head">
@@ -238,19 +89,12 @@
             <i class="bi bi-person"></i> Profile
           </button>
 
-          <button>
-            <i class="bi bi-gear"></i> Settings
-          </button>
-
           <button class="logout" @click.stop="logout">
             <i class="bi bi-box-arrow-right"></i> Logout
           </button>
-
         </div>
       </transition>
-
     </div>
-
   </aside>
 </template>
 
@@ -267,14 +111,11 @@ const route = useRoute()
 const router = useRouter()
 
 const collapsed = ref(false)
-const showJobs = ref(false)
-const showApplicants = ref(false)
 const showMenu = ref(false)
 const tooltip = ref("")
 
 const userName = ref("Loading...")
 const userEmail = ref("Loading...")
-const companyName = ref("Company")
 const userInitial = computed(() => {
   const base = (userName.value || userEmail.value || "U").trim()
   return base ? base[0].toUpperCase() : "U"
@@ -286,11 +127,9 @@ const profileRef = ref(null)
 onMounted(() => {
   const storedName = localStorage.getItem("userName")
   const storedEmail = localStorage.getItem("userEmail")
-  const storedCompanyName = localStorage.getItem("companyName")
 
   userName.value = storedName || "User"
   userEmail.value = storedEmail || "No email"
-  companyName.value = storedCompanyName || "Company"
 
   document.addEventListener("click", handleClickOutside)
 })
@@ -301,24 +140,6 @@ onBeforeUnmount(() => {
 
 function toggleSidebar() {
   collapsed.value = !collapsed.value
-}
-
-function handleJobClick() {
-  if (collapsed.value) {
-    collapsed.value = false
-    showJobs.value = true
-  } else {
-    showJobs.value = !showJobs.value
-  }
-}
-
-function handleApplicantClick() {
-  if (collapsed.value) {
-    collapsed.value = false
-    showApplicants.value = true
-  } else {
-    showApplicants.value = !showApplicants.value
-  }
 }
 
 function toggleMenu() {
@@ -389,11 +210,10 @@ function goProfile() {
 </script>
 
 <style scoped>
-
-/* SIDEBAR BASE */
 .sidebar {
   width: 270px;
   height: 100vh;
+  overflow: hidden;
   background: #ffffff;
   color: #1f2937;
   padding: 22px;
@@ -405,7 +225,6 @@ function goProfile() {
     padding 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ALL CONTENT FADE + SLIDE - SYNC WITH SIDEBAR TIMING */
 .sidebar * {
   transition:
     opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
@@ -414,42 +233,33 @@ function goProfile() {
     color 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* TEXT NORMAL STATE */
 .sidebar .nav-left span,
-.sidebar .profile-text,
-.sidebar .nav-child {
+.sidebar .profile-text {
   opacity: 1;
   transform: translateX(0);
 }
 
-/* COLLAPSED TEXT STATE */
 .sidebar.collapsed .nav-left span,
-.sidebar.collapsed .profile-text,
-.sidebar.collapsed .nav-child {
+.sidebar.collapsed .profile-text {
   opacity: 0;
   transform: translateX(-12px);
   pointer-events: none;
 }
 
-/* ICONS STAY CENTERED */
 .sidebar.collapsed .nav-left {
   justify-content: center;
   transition: justify-content 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* PROFILE ROW FIX */
 .profile {
   height: 48px;
   transition: justify-content 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* DROPDOWN ANIMATION SMOOTHER */
-.slide-enter-active,
 .fade-enter-active {
   transition: all 0.25s ease;
 }
 
-.slide-enter-from,
 .fade-enter-from {
   opacity: 0;
   transform: translateY(6px);
@@ -465,49 +275,22 @@ function goProfile() {
   padding: 22px 10px;
 }
 
-/* BRAND */
+.logo {
+  width: 80px;
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar.collapsed .logo {
+  width: 42px;
+}
+
 .brand {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 30px;
-  gap: 10px;
 }
 
-.brand-text {
-  min-width: 0;
-  transition: opacity 0.35s ease, transform 0.35s ease;
-}
-
-.company-name {
-  font-size: 16px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
-}
-
-.department-name {
-  font-size: 12px;
-  color: #64748b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
-}
-
-.sidebar-dark .department-name {
-  color: #94a3b8;
-}
-
-.sidebar.collapsed .brand-text {
-  opacity: 0;
-  transform: translateX(-10px);
-  pointer-events: none;
-}
-
-/* BURGER */
 .collapse-btn {
   width: 36px;
   height: 36px;
@@ -515,7 +298,7 @@ function goProfile() {
   background: none;
   border: none;
   position: relative;
-  left:10px;
+  left: 10px;
   font-size: 22px;
   cursor: pointer;
   color: inherit;
@@ -523,13 +306,12 @@ function goProfile() {
   align-items: center;
   justify-content: center;
 }
+
 .collapse-btn:hover {
-  background: rgba(0,0,0,0.05);
+  background: rgba(0, 0, 0, 0.05);
 }
 
-/* NAV */
-.nav-link,
-.nav-parent {
+.nav-link {
   position: relative;
   display: flex;
   justify-content: space-between;
@@ -543,7 +325,6 @@ function goProfile() {
   transition: justify-content 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ACTIVE */
 .active {
   background: #3b82f6;
   color: #ffffff;
@@ -556,7 +337,6 @@ function goProfile() {
   font-weight: 600;
 }
 
-/* ICON + TEXT */
 .nav-left {
   display: flex;
   gap: 10px;
@@ -564,35 +344,15 @@ function goProfile() {
   transition: justify-content 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* CHILD */
-.nav-children {
-  padding-left: 16px;
-}
-
-.nav-child {
-  display: block;
-  padding: 8px 14px;
-  border-radius: 8px;
-  text-decoration: none;
-  color: inherit;
-}
-
-/* HOVER */
-.nav-link:hover,
-.nav-parent:hover,
-.nav-child:hover {
+.nav-link:hover {
   background: #f3f4f6;
 }
 
-.sidebar-dark .nav-link:hover,
-.sidebar-dark .nav-parent:hover,
-.sidebar-dark .nav-child:hover {
+.sidebar-dark .nav-link:hover {
   background: #1e293b;
 }
 
-/* CENTER WHEN COLLAPSED */
 .sidebar.collapsed .nav-link,
-.sidebar.collapsed .nav-parent,
 .sidebar.collapsed .profile {
   justify-content: center;
   transition: justify-content 0.5s cubic-bezier(0.22, 1, 0.36, 1);
@@ -602,7 +362,6 @@ function goProfile() {
   justify-content: center;
 }
 
-/* TOOLTIP */
 .tooltip {
   position: absolute;
   left: 90px;
@@ -617,14 +376,12 @@ function goProfile() {
   pointer-events: none;
 }
 
-/* PROFILE */
 .profile-wrapper {
   margin-top: auto;
   position: relative;
   transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* PROFILE ROW */
 .profile {
   position: relative;
   display: flex;
@@ -638,14 +395,13 @@ function goProfile() {
 }
 
 .profile:hover {
-  background: rgba(0,0,0,0.05);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-dark .profile:hover {
   background: #1e293b;
 }
 
-/* AVATAR */
 .avatar {
   width: 36px;
   height: 36px;
@@ -659,15 +415,13 @@ function goProfile() {
   flex-shrink: 0;
 }
 
-/* TEXT WRAPPER */
 .profile-text {
-  transition: 
+  transition:
     opacity 0.25s ease,
     transform 0.25s ease,
     width 0.25s ease;
 }
 
-/* NAME + EMAIL */
 .profile-text .name,
 .profile-text .email {
   display: block;
@@ -677,7 +431,6 @@ function goProfile() {
   max-width: 150px;
 }
 
-/* DROPDOWN */
 .profile-menu {
   position: absolute;
   bottom: 55px;
@@ -685,42 +438,42 @@ function goProfile() {
   background: white;
   min-width: 200px;
   border-radius: 10px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
 }
 
 .sidebar-dark .profile-menu {
   background: #020617;
 }
 
-.profile-menu-head{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:12px;
-  border-bottom:1px solid #e5e7eb;
+.profile-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.sidebar-dark .profile-menu-head{
-  border-bottom:1px solid #1f2937;
+.sidebar-dark .profile-menu-head {
+  border-bottom: 1px solid #1f2937;
 }
 
-.avatar.sm{
-  width:32px;
-  height:32px;
-  font-size:12px;
+.avatar.sm {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
 }
 
-.profile-menu-text .name{
-  font-weight:600;
+.profile-menu-text .name {
+  font-weight: 600;
 }
 
-.profile-menu-text .email{
-  font-size:12px;
-  color:#6b7280;
+.profile-menu-text .email {
+  font-size: 12px;
+  color: #6b7280;
 }
 
-.sidebar-dark .profile-menu-text .email{
-  color:#94a3b8;
+.sidebar-dark .profile-menu-text .email {
+  color: #94a3b8;
 }
 
 .profile-menu button {
@@ -745,29 +498,7 @@ function goProfile() {
   color: #dc2626;
 }
 
-/* ANIMATION */
-.slide-enter-active,
-.fade-enter-active {
-  transition: all 0.25s ease;
-}
-
-.slide-enter-from,
-.fade-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-
-/* FIX OBLONG PROFILE */
-.profile {
-  height: 48px;
-}
-
 .sidebar.collapsed .profile {
   justify-content: center;
 }
-
 </style>
-
-
-

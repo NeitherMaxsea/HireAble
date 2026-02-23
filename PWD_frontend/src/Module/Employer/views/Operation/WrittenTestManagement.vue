@@ -35,121 +35,123 @@
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Question Builder</h3>
-            <button class="btn primary" @click="addQuestion">+ Add Question</button>
-          </div>
+        <div class="builder-preview-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Question Builder</h3>
+              <button class="btn primary" @click="addQuestion">+ Add Question</button>
+            </div>
 
-          <div class="question-list">
-            <article
-              v-for="(question, qIndex) in questions"
-              :key="question.id"
-              class="question-card"
-            >
-              <div class="question-head">
-                <h4>Question {{ qIndex + 1 }}</h4>
-                <button
-                  class="btn-link danger"
-                  @click="removeQuestion(question.id)"
-                >
-                  Remove
-                </button>
-              </div>
-
-              <div class="question-fields">
-                <label>
-                  Category
-                  <input v-model="question.category" type="text" placeholder="e.g. Safety" />
-                </label>
-                <label class="wide">
-                  Question Text
-                  <textarea
-                    v-model="question.text"
-                    rows="2"
-                    placeholder="Type your question here..."
-                  ></textarea>
-                </label>
-              </div>
-
-              <div class="options">
-                <p class="options-label">Options (select the correct answer)</p>
-                <div
-                  v-for="(option, optIndex) in question.options"
-                  :key="option.id"
-                  class="option-row"
-                >
-                  <input
-                    type="radio"
-                    :name="`correct-${question.id}`"
-                    :checked="question.correctOptionId === option.id"
-                    @change="setCorrectOption(question.id, option.id)"
-                  />
-                  <input
-                    v-model="option.text"
-                    type="text"
-                    :placeholder="`Option ${optIndex + 1}`"
-                  />
+            <div class="question-list">
+              <article
+                v-for="(question, qIndex) in questions"
+                :key="question.id"
+                class="question-card"
+              >
+                <div class="question-head">
+                  <h4>Question {{ qIndex + 1 }}</h4>
                   <button
-                    class="icon-btn"
-                    @click="removeOption(question.id, option.id)"
-                    :disabled="question.options.length <= 2"
-                    title="Remove option"
+                    class="btn-link danger"
+                    @click="removeQuestion(question.id)"
                   >
-                    <i class="bi bi-trash3"></i>
+                    Remove
                   </button>
                 </div>
 
-                <button class="btn ghost small" @click="addOption(question.id)">
-                  + Add Option
-                </button>
+                <div class="question-fields">
+                  <label>
+                    Category
+                    <input v-model="question.category" type="text" placeholder="e.g. Safety" />
+                  </label>
+                  <label class="wide">
+                    Question Text
+                    <textarea
+                      v-model="question.text"
+                      rows="2"
+                      placeholder="Type your question here..."
+                    ></textarea>
+                  </label>
+                </div>
+
+                <div class="options">
+                  <p class="options-label">Options (select the correct answer)</p>
+                  <div
+                    v-for="(option, optIndex) in question.options"
+                    :key="option.id"
+                    class="option-row"
+                  >
+                    <input
+                      type="radio"
+                      :name="`correct-${question.id}`"
+                      :checked="question.correctOptionId === option.id"
+                      @change="setCorrectOption(question.id, option.id)"
+                    />
+                    <input
+                      v-model="option.text"
+                      type="text"
+                      :placeholder="`Option ${optIndex + 1}`"
+                    />
+                    <button
+                      class="icon-btn"
+                      @click="removeOption(question.id, option.id)"
+                      :disabled="question.options.length <= 2"
+                      title="Remove option"
+                    >
+                      <i class="bi bi-trash3"></i>
+                    </button>
+                  </div>
+
+                  <button class="btn ghost small" @click="addOption(question.id)">
+                    + Add Option
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel preview-panel">
+            <div class="panel-head">
+              <h3>Live Test Preview</h3>
+            </div>
+
+            <p class="preview-title">{{ formMeta.title || "Untitled Written Test" }}</p>
+            <p class="preview-subtitle">{{ formMeta.description || "No description provided." }}</p>
+
+            <div v-if="previewQuestions.length === 0" class="empty">
+              Add valid questions (question text + at least 2 options + correct answer) to preview this test.
+            </div>
+
+            <div v-else>
+              <div
+                v-for="(question, index) in previewQuestions"
+                :key="question.id"
+                class="preview-question"
+              >
+                <p class="preview-question-title">
+                  {{ index + 1 }}. {{ question.text }}
+                </p>
+                <label v-for="option in question.options" :key="option.id" class="preview-option">
+                  <input
+                    type="radio"
+                    :name="`preview-${question.id}`"
+                    :value="option.id"
+                    v-model="previewAnswers[question.id]"
+                  />
+                  <span>{{ option.text }}</span>
+                </label>
               </div>
-            </article>
-          </div>
-        </section>
 
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Live Test Preview</h3>
-          </div>
+              <div class="preview-actions">
+                <button class="btn primary" @click="submitPreview">Submit Test</button>
+              </div>
 
-          <p class="preview-title">{{ formMeta.title || "Untitled Written Test" }}</p>
-          <p class="preview-subtitle">{{ formMeta.description || "No description provided." }}</p>
-
-          <div v-if="previewQuestions.length === 0" class="empty">
-            Add valid questions (question text + at least 2 options + correct answer) to preview this test.
-          </div>
-
-          <div v-else>
-            <div
-              v-for="(question, index) in previewQuestions"
-              :key="question.id"
-              class="preview-question"
-            >
-              <p class="preview-question-title">
-                {{ index + 1 }}. {{ question.text }}
-              </p>
-              <label v-for="option in question.options" :key="option.id" class="preview-option">
-                <input
-                  type="radio"
-                  :name="`preview-${question.id}`"
-                  :value="option.id"
-                  v-model="previewAnswers[question.id]"
-                />
-                <span>{{ option.text }}</span>
-              </label>
+              <div v-if="result.score !== null" class="result" :class="result.passed ? 'pass' : 'fail'">
+                Score: <strong>{{ result.score }}%</strong>
+                <span>{{ result.passed ? "Passed" : "Failed" }}</span>
+              </div>
             </div>
-
-            <div class="preview-actions">
-              <button class="btn primary" @click="submitPreview">Submit Test</button>
-            </div>
-
-            <div v-if="result.score !== null" class="result" :class="result.passed ? 'pass' : 'fail'">
-              Score: <strong>{{ result.score }}%</strong>
-              <span>{{ result.passed ? "Passed" : "Failed" }}</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
     </div>
   </div>
@@ -307,6 +309,20 @@ export default {
   gap: 16px;
   overflow-y: auto;
   min-height: 0;
+}
+
+.builder-preview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.preview-panel {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
 }
 
 .page-header h2 {
@@ -544,6 +560,18 @@ textarea {
 @media (max-width: 800px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .builder-preview-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 }
 </style>

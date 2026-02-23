@@ -164,8 +164,13 @@
         </div>
 
         <div class="detail-actions bottom">
-          <button class="apply-btn" @click="applyJob">
-            Apply for this Job
+          <button
+            class="apply-btn"
+            :class="{ disabled: hasPendingApplication }"
+            :disabled="hasPendingApplication"
+            @click="applyJob"
+          >
+            {{ hasPendingApplication ? "Pending" : "Apply for this Job" }}
           </button>
         </div>
       </div>
@@ -199,15 +204,30 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, computed } from "vue"
 import { db } from "@/lib/client-platform"
-import { addDoc, collection, serverTimestamp, onSnapshot } from "@/lib/laravel-data"
+import { addDoc, collection, onSnapshot, query, serverTimestamp, where } from "@/lib/laravel-data"
+import Toastify from "toastify-js"
+import "toastify-js/src/toastify.css"
 
 const jobs = ref([])
 const selectedJob = ref(null)
+const applicantId = ref("")
+const applicantEmail = ref("")
+const appliedJobIds = ref(new Set())
 const currentPhotoIndex = ref(0)
 const isLightboxOpen = ref(false)
 let unsubscribeJobs = null
+let unsubscribeApplications = null
 
 onMounted(() => {
+  applicantId.value = String(
+    localStorage.getItem("userUid") ||
+    localStorage.getItem("uid") ||
+    ""
+  ).trim()
+  applicantEmail.value = String(localStorage.getItem("userEmail") || "")
+    .trim()
+    .toLowerCase()
+
   unsubscribeJobs = onSnapshot(collection(db, "jobs"), snapshot => {
     const list = snapshot.docs.map(d => ({
       id: d.id,
@@ -249,11 +269,48 @@ onMounted(() => {
       selectedJob.value = jobs.value.find(j => j.id === selectedJob.value.id) || null
     }
   })
+
+  let appsTarget = collection(db, "applications")
+  if (applicantId.value) {
+    appsTarget = query(collection(db, "applications"), where("applicantId", "==", applicantId.value))
+  } else if (applicantEmail.value) {
+    appsTarget = query(collection(db, "applications"), where("applicantEmail", "==", applicantEmail.value))
+  }
+
+  unsubscribeApplications = onSnapshot(appsTarget, snapshot => {
+    const nextAppliedJobIds = new Set()
+
+    snapshot.docs.forEach((docSnap) => {
+      const raw = docSnap.data() || {}
+      const applicationJobId = String(raw.jobId || "").trim()
+      const applicationApplicantId = String(raw.applicantId || "").trim()
+      const applicationApplicantEmail = String(raw.applicantEmail || "").trim().toLowerCase()
+
+      if (!applicationJobId) return
+
+      if (applicantId.value) {
+        if (applicationApplicantId !== applicantId.value) return
+      } else if (applicantEmail.value) {
+        if (applicationApplicantEmail !== applicantEmail.value) return
+      } else {
+        return
+      }
+
+      nextAppliedJobIds.add(applicationJobId)
+    })
+
+    appliedJobIds.value = nextAppliedJobIds
+  }, () => {
+    appliedJobIds.value = new Set()
+  })
 })
 
 onBeforeUnmount(() => {
   if (typeof unsubscribeJobs === "function") {
     unsubscribeJobs()
+  }
+  if (typeof unsubscribeApplications === "function") {
+    unsubscribeApplications()
   }
 })
 
@@ -286,6 +343,12 @@ const mapUrl = computed(() => {
   return `https://www.google.com/maps?q=${encodeURIComponent(
     selectedJob.value.location
   )}&output=embed`
+})
+
+const hasPendingApplication = computed(() => {
+  const jobId = String(selectedJob.value?.id || "").trim()
+  if (!jobId) return false
+  return appliedJobIds.value.has(jobId)
 })
 
 const photoList = computed(() => {
@@ -321,23 +384,55 @@ const setPhoto = (idx) => {
   currentPhotoIndex.value = idx
 }
 
+const showToast = (text, backgroundColor) => {
+  Toastify({
+    text,
+    duration: 3000,
+    gravity: "top",
+    position: "right",
+    stopOnFocus: true,
+    backgroundColor
+  }).showToast()
+}
+
 // APPLY
 const applyJob = async () => {
   if (!selectedJob.value) return
+  if (hasPendingApplication.value) {
+    showToast("Application already pending.", "#f59e0b")
+    return
+  }
 
   try {
+    const applicantIdValue = String(
+      localStorage.getItem("userUid") ||
+      localStorage.getItem("uid") ||
+      ""
+    ).trim()
+    const applicantName = String(localStorage.getItem("userName") || "").trim()
+    const applicantEmailValue = String(localStorage.getItem("userEmail") || "").trim()
+    const selectedJobId = String(selectedJob.value.id || "").trim()
+
     await addDoc(collection(db, "applications"), {
-      jobId: selectedJob.value.id,
-      jobTitle: selectedJob.value.title,
+      jobId: selectedJobId,
+      jobTitle: String(selectedJob.value.title || "").trim(),
+      applicantId: applicantIdValue || null,
+      applicantName: applicantName || "Applicant",
+      applicantEmail: applicantEmailValue || null,
       appliedAt: serverTimestamp(),
       status: "pending"
     })
 
-    alert("Application sent!")
+    appliedJobIds.value = new Set([...appliedJobIds.value, selectedJobId])
+    showToast("Application sent!", "#16a34a")
 
   } catch (err) {
     console.error(err)
-    alert("Failed to apply")
+    const message =
+      err?.response?.data?.message ||
+      err?.message ||
+      "Failed to apply"
+    showToast(message, "#dc2626")
   }
 }
 </script>
@@ -783,6 +878,12 @@ const applyJob = async () => {
 
 .apply-btn:hover{
   background:#1d4ed8;
+}
+
+.apply-btn.disabled,
+.apply-btn:disabled{
+  background:#9ca3af;
+  cursor:not-allowed;
 }
 
 /* EMPTY */

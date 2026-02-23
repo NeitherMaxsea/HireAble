@@ -41,7 +41,7 @@
                 <div class="location-map">
                   <iframe
                     v-if="job.location"
-                    :src="getMapUrl(job.location)"
+                    :src="getMapUrl(job)"
                     loading="lazy"
                     referrerpolicy="no-referrer-when-downgrade"
                   ></iframe>
@@ -53,7 +53,7 @@
 
                 <span
                   class="badge"
-                  :class="job.status === 'open' ? 'open' : 'closed'"
+                  :class="job.status === 'open' ? 'open' : (job.status === 'pending_finance_review' ? 'pending' : 'closed')"
                 >
                   {{ job.status }}
                 </span>
@@ -85,7 +85,7 @@
                   </button>
 
                   <button
-                    v-else
+                    v-else-if="job.status === 'closed'"
                     class="reopen"
                     type="button"
                     :disabled="busyJobId === job.id"
@@ -131,7 +131,21 @@
 
           <div class="field">
             <label>Location</label>
-            <input v-model="editJobData.location" placeholder="Location">
+            <select v-model="editJobData.location">
+              <option disabled value="">Select barangay</option>
+              <option
+                v-for="barangay in dasmaBarangays"
+                :key="barangay"
+                :value="barangay"
+              >
+                {{ barangay }}
+              </option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Exact Address</label>
+            <input v-model="editJobData.exactAddress" placeholder="Street, block, lot, landmark">
           </div>
 
           <div class="field">
@@ -212,6 +226,10 @@
               <p>{{ viewJobData.location || "Not specified" }}</p>
             </div>
             <div>
+              <h4>Exact Address</h4>
+              <p>{{ viewJobData.exactAddress || "Not specified" }}</p>
+            </div>
+            <div>
               <h4>Type</h4>
               <p>{{ viewJobData.type || "Open" }}</p>
             </div>
@@ -236,7 +254,7 @@
             <h4>Map</h4>
             <iframe
               v-if="viewJobData.location"
-              :src="getMapUrl(viewJobData.location)"
+              :src="getMapUrl(viewJobData)"
               loading="lazy"
               referrerpolicy="no-referrer-when-downgrade"
             ></iframe>
@@ -275,23 +293,14 @@
 </template>
 
 <script>
-import { auth, db } from "@/lib/client-platform"
+import { auth } from "@/lib/client-platform"
 import api from "@/services/api"
 import Toastify from "toastify-js"
 import "toastify-js/src/toastify.css"
 import { onAuthStateChanged } from "@/lib/session-auth"
-import {
-  collection,
-  onSnapshot,
-  query,
-  where,
-  doc,
-  updateDoc,
-  deleteDoc,
-  getDoc,
-  writeBatch,
-  serverTimestamp
-} from "@/lib/laravel-data"
+import { DASMA_BARANGAYS } from "@/constants/dasmaBarangays"
+
+let pollTimer = null
 
 const toast = {
   success(text) {
@@ -314,8 +323,7 @@ export default {
   data() {
     return {
       jobs: [],
-      jobsUnsubscribe: null,
-      scopeReady: false,
+      dasmaBarangays: DASMA_BARANGAYS,
       search: "",
       backfilling: false,
       busyJobId: null,
@@ -343,9 +351,9 @@ export default {
   },
 
   beforeUnmount() {
-    if (typeof this.jobsUnsubscribe === "function") {
-      this.jobsUnsubscribe()
-      this.jobsUnsubscribe = null
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
     }
   },
 
@@ -382,40 +390,35 @@ export default {
         return
       }
 
-      if (typeof this.jobsUnsubscribe === "function") {
-        this.jobsUnsubscribe()
-        this.jobsUnsubscribe = null
-      }
+      await this.loadJobs(actor)
+      if (pollTimer) clearInterval(pollTimer)
+      pollTimer = setInterval(async () => {
+        const freshActor = await this.resolveActorMeta()
+        if (!freshActor?.uid) return
+        await this.loadJobs(freshActor)
+      }, 30000)
+    },
 
-      let jobsRef = collection(db, "jobs")
-      if (actor.companyId) {
-        jobsRef = query(jobsRef, where("companyId", "==", actor.companyId))
-      } else {
-        jobsRef = query(jobsRef, where("postedByUid", "==", actor.uid))
-      }
+    async loadJobs(actor) {
+      try {
+        const params = actor?.companyId
+          ? { companyId: actor.companyId }
+          : { postedByUid: actor.uid }
 
-      this.jobsUnsubscribe = onSnapshot(jobsRef, (snapshot) => {
-        this.jobs = snapshot.docs.map((d) => {
-          const raw = d.data()
-          const images = Array.isArray(raw.images) ? raw.images.filter(Boolean) : []
+        const response = await api.get("/jobs", { params })
+        const rows = Array.isArray(response?.data) ? response.data : []
 
-          return {
-            id: d.id,
-            ...raw,
-            imageUrl:
-              raw.imageUrl ||
-              raw.imageURL ||
-              raw.photo1 ||
-              images[0] ||
-              "",
-            imageUrl2:
-              raw.imageUrl2 ||
-              raw.imageURL2 ||
-              raw.photo2 ||
-              images[1] ||
-              ""
-          }
-        }).sort((a, b) => this.getCreatedAtMillis(b.createdAt) - this.getCreatedAtMillis(a.createdAt))
+        this.jobs = rows
+          .map((raw) => {
+            const images = Array.isArray(raw?.images) ? raw.images.filter(Boolean) : []
+            return {
+              id: String(raw?.id || ""),
+              ...raw,
+              imageUrl: raw?.imageUrl || images[0] || "",
+              imageUrl2: raw?.imageUrl2 || images[1] || "",
+            }
+          })
+          .sort((a, b) => Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || "")))
 
         if (this.showViewModal && this.viewJobData?.id) {
           const fresh = this.jobs.find((job) => job.id === this.viewJobData.id)
@@ -424,49 +427,28 @@ export default {
 
         if (this.showModal && this.editJobData?.id) {
           const fresh = this.jobs.find((job) => job.id === this.editJobData.id)
-          if (fresh) {
-            this.editJobData = { ...fresh }
-          }
+          if (fresh) this.editJobData = { ...fresh }
         }
-
-        this.scopeReady = true
-      })
-    },
-
-    getCreatedAtMillis(ts) {
-      if (!ts) return 0
-      if (typeof ts?.toMillis === "function") return ts.toMillis()
-      if (typeof ts?.seconds === "number") return ts.seconds * 1000
-      if (ts instanceof Date) return ts.getTime()
-      return 0
+      } catch (err) {
+        console.error(err)
+        toast.error(err?.response?.data?.message || "Failed to load jobs.")
+      }
     },
 
     async resolveActorMeta() {
       const user = await this.waitForAuthUser()
       if (!user?.uid) return null
 
-      let profile = {}
-      try {
-        const snap = await getDoc(doc(db, "users", user.uid))
-        if (snap.exists()) {
-          profile = snap.data() || {}
-        }
-      } catch {
-        // fallback to auth/localStorage
-      }
-
       const email = String(
-        profile.email || user.email || localStorage.getItem("userEmail") || ""
+        user.email || localStorage.getItem("userEmail") || ""
       ).trim()
       const name = String(
-        profile.username ||
-        profile.name ||
         localStorage.getItem("userName") ||
         email
       ).trim()
-      const role = String(profile.role || localStorage.getItem("userRole") || "").trim()
-      const companyId = String(profile.companyId || localStorage.getItem("companyId") || "").trim()
-      const companyName = String(profile.companyName || localStorage.getItem("companyName") || "").trim()
+      const role = String(localStorage.getItem("userRole") || "").trim()
+      const companyId = String(localStorage.getItem("companyId") || "").trim()
+      const companyName = String(localStorage.getItem("companyName") || "").trim()
 
       if (!email) return null
       return {
@@ -502,20 +484,18 @@ export default {
 
       this.backfilling = true
       try {
-        const batch = writeBatch(db)
-        legacyJobs.forEach((job) => {
-          batch.update(doc(db, "jobs", job.id), {
+        await Promise.all(
+          legacyJobs.map((job) =>
+            api.put(`/jobs/${job.id}`, {
             postedByName: actor.name,
             postedByEmail: actor.email,
             postedByRole: actor.role,
             postedByUid: actor.uid,
             companyId: actor.companyId || "",
             companyName: actor.companyName || "",
-            legacyAccountBackfilledAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
           })
-        })
-        await batch.commit()
+        ))
+        await this.loadJobs(actor)
         toast.success(`Updated ${legacyJobs.length} legacy job account(s).`)
       } catch (err) {
         console.error(err)
@@ -763,9 +743,12 @@ export default {
       return `${this.getApiOrigin()}/api/uploads/${encodedPath}`
     },
 
-    getMapUrl(location) {
+    getMapUrl(job) {
+      const location = String(job?.location || "").trim()
       if (!location) return ""
-      return `https://www.google.com/maps?q=${encodeURIComponent(location)}&output=embed`
+      const exactAddress = String(job?.exactAddress || "").trim()
+      const query = [exactAddress, location, "Dasmarinas, Cavite"].filter(Boolean).join(", ")
+      return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
     },
 
     async updateJob() {
@@ -806,10 +789,11 @@ export default {
           return
         }
 
-        await updateDoc(doc(db, "jobs", this.editJobData.id), {
+        await api.put(`/jobs/${this.editJobData.id}`, {
           title: this.editJobData.title,
           description: this.editJobData.description,
           location: this.editJobData.location,
+          exactAddress: this.editJobData.exactAddress,
           salary: this.editJobData.salary,
           type: this.editJobData.type || "",
           imageUrl: this.editJobData.imageUrl || "",
@@ -820,6 +804,8 @@ export default {
         this.showModal = false
         this.editImageFile1 = null
         this.editImageFile2 = null
+        const actor = await this.resolveActorMeta()
+        if (actor?.uid) await this.loadJobs(actor)
         toast.success("Job updated successfully")
       } catch (err) {
         console.error(err)
@@ -840,10 +826,11 @@ export default {
 
       this.busyJobId = id
       try {
-        await updateDoc(doc(db, "jobs", id), {
+        await api.put(`/jobs/${id}`, {
           status: "closed",
-          updatedAt: serverTimestamp()
         })
+        const actor = await this.resolveActorMeta()
+        if (actor?.uid) await this.loadJobs(actor)
         toast.success("Job closed.")
       } catch (err) {
         console.error(err)
@@ -862,10 +849,11 @@ export default {
 
       this.busyJobId = id
       try {
-        await updateDoc(doc(db, "jobs", id), {
+        await api.put(`/jobs/${id}`, {
           status: "open",
-          updatedAt: serverTimestamp()
         })
+        const actor = await this.resolveActorMeta()
+        if (actor?.uid) await this.loadJobs(actor)
         toast.success("Job reopened.")
       } catch (err) {
         console.error(err)
@@ -886,7 +874,9 @@ export default {
 
       this.busyJobId = id
       try {
-        await deleteDoc(doc(db, "jobs", id))
+        await api.delete(`/jobs/${id}`)
+        const actor = await this.resolveActorMeta()
+        if (actor?.uid) await this.loadJobs(actor)
         toast.success("Job deleted.")
       } catch (err) {
         console.error(err)
@@ -1099,6 +1089,11 @@ export default {
 .open{
   background:#dcfce7;
   color:#166534;
+}
+
+.pending{
+  background:#fef3c7;
+  color:#92400e;
 }
 
 .closed{

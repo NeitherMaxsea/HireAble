@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class JobController extends Controller
 {
@@ -22,7 +23,7 @@ class JobController extends Controller
         if ($request->filled('status')) {
             $query->where('status', (string) $request->input('status'));
         }
-        if ($request->filled('financeApprovalStatus')) {
+        if ($request->filled('financeApprovalStatus') && $this->hasJobsColumn('finance_approval_status')) {
             $query->where('finance_approval_status', (string) $request->input('financeApprovalStatus'));
         }
 
@@ -115,6 +116,7 @@ class JobController extends Controller
         $mapped = [
             'title' => $payload['title'] ?? null,
             'location' => $payload['location'] ?? null,
+            'exact_address' => $payload['exactAddress'] ?? ($payload['exact_address'] ?? null),
             'type' => $payload['type'] ?? null,
             'description' => $payload['description'] ?? null,
             'qualifications' => $payload['qualifications'] ?? null,
@@ -166,43 +168,51 @@ class JobController extends Controller
             $mapped['created_at'] = now();
         }
 
-        return array_filter($mapped, fn ($value) => $value !== null);
+        $available = array_flip($this->availableJobsColumns());
+        $filtered = array_filter(
+            $mapped,
+            fn ($value, $key) => $value !== null && isset($available[$key]),
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        return $filtered;
     }
 
     private function normalizeRow(object $row): array
     {
         return [
             'id' => (string) $row->id,
-            'title' => $row->title,
-            'location' => $row->location,
-            'type' => $row->type,
-            'description' => $row->description,
-            'qualifications' => $row->qualifications,
-            'disabilityType' => $row->disability_type,
-            'accommodations' => $row->accommodations,
-            'salary' => $row->salary,
-            'benefits' => $row->benefits,
-            'imageUrl' => $row->image_url,
-            'imageUrl2' => $row->image_url2,
-            'images' => $row->images ? json_decode($row->images, true) : [],
-            'status' => $row->status,
-            'financeApprovalStatus' => $row->finance_approval_status,
-            'financeApprovalNote' => $row->finance_approval_note,
-            'financeRejectionReason' => $row->finance_rejection_reason,
-            'financeReviewedByUid' => $row->finance_reviewed_by_uid,
-            'financeReviewedByName' => $row->finance_reviewed_by_name,
-            'financeReviewedByEmail' => $row->finance_reviewed_by_email,
-            'financeReviewedAt' => $row->finance_reviewed_at ? (string) $row->finance_reviewed_at : null,
-            'publishedAt' => $row->published_at ? (string) $row->published_at : null,
-            'postedByName' => $row->posted_by_name,
-            'postedByEmail' => $row->posted_by_email,
-            'postedByRole' => $row->posted_by_role,
-            'postedByUid' => $row->posted_by_uid,
-            'companyId' => $row->company_id,
-            'companyName' => $row->company_name,
-            'createdByCompanyAdminUid' => $row->created_by_company_admin_uid,
-            'createdAt' => (string) $row->created_at,
-            'updatedAt' => (string) $row->updated_at,
+            'title' => $this->rowValue($row, 'title'),
+            'location' => $this->rowValue($row, 'location'),
+            'exactAddress' => $this->rowValue($row, 'exact_address'),
+            'type' => $this->rowValue($row, 'type'),
+            'description' => $this->rowValue($row, 'description'),
+            'qualifications' => $this->rowValue($row, 'qualifications'),
+            'disabilityType' => $this->rowValue($row, 'disability_type'),
+            'accommodations' => $this->rowValue($row, 'accommodations'),
+            'salary' => $this->rowValue($row, 'salary'),
+            'benefits' => $this->rowValue($row, 'benefits'),
+            'imageUrl' => $this->rowValue($row, 'image_url'),
+            'imageUrl2' => $this->rowValue($row, 'image_url2'),
+            'images' => $this->rowValue($row, 'images') ? json_decode((string) $this->rowValue($row, 'images'), true) : [],
+            'status' => $this->rowValue($row, 'status'),
+            'financeApprovalStatus' => $this->rowValue($row, 'finance_approval_status', 'pending'),
+            'financeApprovalNote' => $this->rowValue($row, 'finance_approval_note'),
+            'financeRejectionReason' => $this->rowValue($row, 'finance_rejection_reason'),
+            'financeReviewedByUid' => $this->rowValue($row, 'finance_reviewed_by_uid'),
+            'financeReviewedByName' => $this->rowValue($row, 'finance_reviewed_by_name'),
+            'financeReviewedByEmail' => $this->rowValue($row, 'finance_reviewed_by_email'),
+            'financeReviewedAt' => $this->rowValue($row, 'finance_reviewed_at') ? (string) $this->rowValue($row, 'finance_reviewed_at') : null,
+            'publishedAt' => $this->rowValue($row, 'published_at') ? (string) $this->rowValue($row, 'published_at') : null,
+            'postedByName' => $this->rowValue($row, 'posted_by_name'),
+            'postedByEmail' => $this->rowValue($row, 'posted_by_email'),
+            'postedByRole' => $this->rowValue($row, 'posted_by_role'),
+            'postedByUid' => $this->rowValue($row, 'posted_by_uid'),
+            'companyId' => $this->rowValue($row, 'company_id'),
+            'companyName' => $this->rowValue($row, 'company_name'),
+            'createdByCompanyAdminUid' => $this->rowValue($row, 'created_by_company_admin_uid'),
+            'createdAt' => $this->rowValue($row, 'created_at') ? (string) $this->rowValue($row, 'created_at') : null,
+            'updatedAt' => $this->rowValue($row, 'updated_at') ? (string) $this->rowValue($row, 'updated_at') : null,
         ];
     }
 
@@ -220,5 +230,31 @@ class JobController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function availableJobsColumns(): array
+    {
+        static $columns = null;
+        if ($columns !== null) {
+            return $columns;
+        }
+
+        if (!Schema::hasTable('jobs')) {
+            $columns = [];
+            return $columns;
+        }
+
+        $columns = Schema::getColumnListing('jobs');
+        return $columns;
+    }
+
+    private function hasJobsColumn(string $column): bool
+    {
+        return in_array($column, $this->availableJobsColumns(), true);
+    }
+
+    private function rowValue(object $row, string $key, mixed $default = null): mixed
+    {
+        return property_exists($row, $key) ? $row->{$key} : $default;
     }
 }
