@@ -68,7 +68,6 @@
     </button>
 
     <nav class="nav-center">
-      <router-link to="/search-jobs" class="nav-link">Find Job</router-link>
       <router-link to="/about-us" class="nav-link">About Us</router-link>
       <a href="#tutorial" class="nav-link" @click.prevent="scrollTo('tutorial')">Read First</a>
       <a href="#privacy" class="nav-link" @click.prevent="scrollTo('privacy')">Privacy</a>
@@ -115,7 +114,6 @@
           </div>
 
           <nav class="mobile-nav-links">
-            <router-link to="/search-jobs" class="mobile-nav-link" @click="closeMobileMenu">Find Job</router-link>
             <router-link to="/about-us" class="mobile-nav-link" @click="closeMobileMenu">About Us</router-link>
             <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('tutorial')">Read First</button>
             <button type="button" class="mobile-nav-link" @click="onMobileNavSelect('privacy')">Privacy</button>
@@ -166,14 +164,14 @@
                 <path d="M12 21s6-5.3 6-10a6 6 0 1 0-12 0c0 4.7 6 10 6 10z"></path>
                 <circle cx="12" cy="11" r="2.4"></circle>
               </svg>
-              <select v-model="heroFilters.location" aria-label="Barangay location">
-                <option value="">All Barangays in Dasmarinas, Cavite</option>
+              <select v-model="heroFilters.location" aria-label="Disability type">
+                <option value="">All Disability Types</option>
                 <option
-                  v-for="barangay in dasmaBarangays"
-                  :key="barangay"
-                  :value="barangay"
+                  v-for="disability in heroDisabilities"
+                  :key="disability"
+                  :value="disability"
                 >
-                  {{ barangay }}
+                  {{ disability }}
                 </option>
               </select>
               <svg class="search-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -181,26 +179,6 @@
               </svg>
             </label>
 
-            <label class="search-field search-field-select">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 7h16"></path>
-                <path d="M4 12h16"></path>
-                <path d="M4 17h16"></path>
-              </svg>
-              <select v-model="heroFilters.category" aria-label="Job category">
-                <option value="">All Job Categories</option>
-                <option
-                  v-for="category in heroCategories"
-                  :key="category"
-                  :value="category"
-                >
-                  {{ category }}
-                </option>
-              </select>
-              <svg class="search-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="m6 9 6 6 6-6"></path>
-              </svg>
-            </label>
             <button type="submit" class="search-submit" :disabled="heroSearchLoading">
               {{ heroSearchLoading ? "Searching..." : "Search" }}
             </button>
@@ -221,71 +199,101 @@
       :class="{ 'about-visible': isAboutVisible }"
     >
       <div class="about-cta-shell">
-        <h3 class="about-cta-title">Do You Want to Work?</h3>
+        <h3 class="about-cta-title">Inclusive Work Opportunities</h3>
         <p>
-          Narito na ang platform na tumutulong sa Persons with Disabilities na
-          makahanap ng inclusive at makabuluhang trabaho, kasama ang employers
-          na handang magbigay ng patas na oportunidad.
+          Narito ang mga halimbawa ng work opportunities at disability-friendly
+          roles na puwedeng i-match sa inclusive companies.
         </p>
 
-        <div class="about-cta-content" aria-label="Why use this platform">
-          <div class="about-cta-panel about-cta-benefits">
-            <h4>Why use HireAble Proximity?</h4>
-            <ul class="about-cta-list">
-              <li>
-                <span class="about-cta-check" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M5 12.5l4.2 4.2L19 7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-                <div>
-                  <strong>Inclusive job matching</strong>
-                  <p>Mas madaling hanapin ang roles na tugma sa skills, preferences, at qualifications.</p>
+        <div class="about-cta-content" aria-label="Featured inclusive job posts">
+          <div class="about-cta-panel about-cta-actions about-cta-jobs-list">
+            <h4>Featured Job Posts</h4>
+            <p class="about-cta-actions-copy">
+              Preview ng job posts na puwedeng makita ng applicants, kasama ang
+              disability support / fit sa company setup.
+            </p>
+            <div class="landing-job-preview-list">
+              <article
+                v-for="(job, index) in featuredJobPosts"
+                :key="`${job.title}-${job.company}-${job.postedDate}`"
+                class="landing-job-card"
+                :class="{ 'is-active': selectedFeaturedJobIndex === index }"
+                role="button"
+                tabindex="0"
+                @click="selectFeaturedJob(index)"
+                @keydown.enter.prevent="selectFeaturedJob(index)"
+                @keydown.space.prevent="selectFeaturedJob(index)"
+              >
+                <div class="landing-job-head">
+                  <div class="landing-job-logo" aria-hidden="true">
+                    {{ job.companyInitials }}
+                  </div>
+                  <div class="landing-job-title-wrap">
+                    <h5>{{ job.title }}</h5>
+                    <p>{{ job.company }}</p>
+                  </div>
                 </div>
-              </li>
-              <li>
-                <span class="about-cta-check" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M5 12.5l4.2 4.2L19 7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-                <div>
-                  <strong>Employer-ready opportunities</strong>
-                  <p>Mga kumpanya na handang magbigay ng patas at accessible na hiring process.</p>
+
+                <p class="landing-job-desc">
+                  {{ job.description }}
+                </p>
+
+                <div class="landing-job-meta">
+                  <span class="landing-job-chip">{{ job.location }}</span>
+                  <span class="landing-job-chip">{{ job.setup }}</span>
+                  <span class="landing-job-chip">{{ job.vacancies }} Vacancies</span>
+                  <span class="landing-job-chip">{{ job.salary }}</span>
+                  <span class="landing-job-chip landing-job-chip-accent">{{ job.disabilityFit }}</span>
+                  <span class="landing-job-chip">{{ job.postedDate }}</span>
                 </div>
-              </li>
-              <li>
-                <span class="about-cta-check" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M5 12.5l4.2 4.2L19 7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-                <div>
-                  <strong>Local support focus</strong>
-                  <p>Built for PWD employment assistance in Dasmarinas, Cavite and nearby communities.</p>
-                </div>
-              </li>
-            </ul>
+              </article>
+            </div>
           </div>
 
-          <div class="about-cta-panel about-cta-actions">
-            <h4>Start here</h4>
+          <div v-if="selectedFeaturedJob" class="about-cta-panel about-cta-actions landing-job-detail-panel">
+            <h4>Job Details</h4>
             <p class="about-cta-actions-copy">
-              Piliin ang gusto mong gawin ngayon at simulan ang journey mo sa inclusive employment platform.
+              Makikita dito sa right side ang details ng job post na pinindot mo.
             </p>
-            <div class="about-cta-actions-grid">
-              <router-link to="/search-jobs" class="about-cta-action about-cta-action-primary">
-                Browse Jobs
-              </router-link>
-              <router-link to="/about-us" class="about-cta-action">
-                Learn About Us
-              </router-link>
-              <router-link to="/login" class="about-cta-action">
-                Sign In
-              </router-link>
-              <a href="#tutorial" class="about-cta-action">
-                View Tutorial
-              </a>
+
+            <div class="landing-job-detail-head">
+              <div class="landing-job-logo landing-job-logo-lg" aria-hidden="true">
+                {{ selectedFeaturedJob.companyInitials }}
+              </div>
+              <div class="landing-job-title-wrap">
+                <h5>{{ selectedFeaturedJob.title }}</h5>
+                <p>{{ selectedFeaturedJob.company }}</p>
+              </div>
+            </div>
+
+            <p class="landing-job-detail-desc">{{ selectedFeaturedJob.description }}</p>
+
+            <div class="landing-job-meta">
+              <span class="landing-job-chip">{{ selectedFeaturedJob.location }}</span>
+              <span class="landing-job-chip">{{ selectedFeaturedJob.setup }}</span>
+              <span class="landing-job-chip">{{ selectedFeaturedJob.vacancies }} Vacancies</span>
+              <span class="landing-job-chip">{{ selectedFeaturedJob.salary }}</span>
+              <span class="landing-job-chip landing-job-chip-accent">{{ selectedFeaturedJob.disabilityFit }}</span>
+              <span class="landing-job-chip">{{ selectedFeaturedJob.postedDate }}</span>
+            </div>
+
+            <div class="landing-job-detail-grid">
+              <div class="landing-job-detail-block">
+                <h6>Qualifications</h6>
+                <ul>
+                  <li v-for="item in selectedFeaturedJob.qualifications" :key="`qual-${item}`">
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
+              <div class="landing-job-detail-block">
+                <h6>Responsibilities</h6>
+                <ul>
+                  <li v-for="item in selectedFeaturedJob.responsibilities" :key="`resp-${item}`">
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -461,6 +469,7 @@ export default {
       isTutorialInView: false,
       isTutorialVisible: false,
       selectedTutorialIndex: null,
+      selectedFeaturedJobIndex: 0,
       isMobileMenuOpen: false,
       openDropdown: null,
       lastY: 0,
@@ -481,86 +490,17 @@ export default {
         location: "",
         category: ""
       },
-      dasmaBarangays: [
-        "Burol I",
-        "Burol II",
-        "Burol III",
-        "Datu Esmael (Bago-a-ingud)",
-        "Emmanuel Bergado I",
-        "Emmanuel Bergado II",
-        "Fatima I",
-        "Fatima II",
-        "Fatima III",
-        "H-2",
-        "Langkaan I",
-        "Langkaan II",
-        "Luzviminda I",
-        "Luzviminda II",
-        "Paliparan I",
-        "Paliparan II",
-        "Paliparan III",
-        "Sabang",
-        "Salawag",
-        "Salitran I",
-        "Salitran II",
-        "Salitran III",
-        "Salitran IV",
-        "Sampaloc I",
-        "Sampaloc II",
-        "Sampaloc III",
-        "Sampaloc IV",
-        "Sampaloc V",
-        "San Agustin I",
-        "San Agustin II",
-        "San Agustin III",
-        "San Andres I",
-        "San Andres II",
-        "San Antonio de Padua I",
-        "San Antonio de Padua II",
-        "San Dionisio (Barangay I)",
-        "San Esteban (Barangay IV)",
-        "San Francisco I",
-        "San Francisco II",
-        "San Isidro Labrador I",
-        "San Isidro Labrador II",
-        "San Jose",
-        "San Juan (San Juan I)",
-        "San Lorenzo Ruiz I",
-        "San Lorenzo Ruiz II",
-        "San Luis I",
-        "San Luis II",
-        "San Manuel I",
-        "San Manuel II",
-        "San Mateo",
-        "San Miguel",
-        "San Nicolas I",
-        "San Nicolas II",
-        "San Roque (Sta. Cristina II)",
-        "San Simon (Barangay VII)",
-        "Santa Cristina I",
-        "Santa Cruz I",
-        "Santa Cruz II",
-        "Santa Fe",
-        "Santa Lucia (San Juan II)",
-        "Santa Maria (Barangay XX)",
-        "Santo Cristo (Barangay II-A)",
-        "Santo Nino I",
-        "Santo Nino II",
-        "Victoria Reyes",
-        "Zone I (Poblacion)",
-        "Zone I-A (Poblacion)",
-        "Zone II (Poblacion)",
-        "Zone III (Poblacion)",
-        "Zone IV (Poblacion)",
-        "Zone IV-A (Poblacion)",
-        "Zone V (Poblacion)",
-        "Zone VI (Poblacion)",
-        "Zone VII (Poblacion)",
-        "Zone VIII (Poblacion)",
-        "Zone IX (Poblacion)",
-        "Zone X (Poblacion)",
-        "Zone XI (Poblacion)",
-        "Zone XII (Poblacion)"
+      heroDisabilities: [
+        "Visual Impairment",
+        "Hearing Impairment",
+        "Speech and Language Impairment",
+        "Physical Disability / Orthopedic",
+        "Psychosocial Disability",
+        "Intellectual Disability",
+        "Learning Disability",
+        "Autism Spectrum Disorder",
+        "Chronic Illness",
+        "Multiple Disabilities"
       ],
       heroCategories: [
         "Administrative and Office Support",
@@ -575,6 +515,74 @@ export default {
         "Manufacturing and Production",
         "Retail and Sales",
         "Security and Safety"
+      ],
+      featuredJobPosts: [
+        {
+          title: "Data Encoder",
+          company: "Inclusive Business Solutions",
+          companyInitials: "IB",
+          description: "Encode and validate records, prepare reports, and support admin tasks using accessible office tools and clear workflows.",
+          location: "Dasmarinas, Cavite",
+          setup: "On-site / Hybrid",
+          vacancies: 3,
+          salary: "PHP 12,000 - PHP 15,000",
+          disabilityFit: "Hearing / Speech Friendly",
+          postedDate: "Posted: Feb 24, 2026",
+          qualifications: [
+            "Basic computer literacy and typing skills",
+            "Attention to detail in data checking",
+            "Can follow written instructions and task lists"
+          ],
+          responsibilities: [
+            "Encode and verify daily records",
+            "Organize files and update tracking sheets",
+            "Coordinate with admin team for document requests"
+          ]
+        },
+        {
+          title: "Customer Support (Chat)",
+          company: "CareConnect BPO",
+          companyInitials: "CC",
+          description: "Handle chat-based customer concerns, document tickets, and coordinate with team leads through text-first communication channels.",
+          location: "Imus / Dasmarinas",
+          setup: "Hybrid",
+          vacancies: 5,
+          salary: "PHP 16,000 - PHP 21,000",
+          disabilityFit: "Hearing / Physical Friendly",
+          postedDate: "Posted: Feb 22, 2026",
+          qualifications: [
+            "Good written communication skills",
+            "Basic customer service experience is a plus",
+            "Can use chat or ticketing tools"
+          ],
+          responsibilities: [
+            "Respond to customer concerns through chat",
+            "Create ticket notes and follow-up updates",
+            "Escalate urgent issues to supervisors"
+          ]
+        },
+        {
+          title: "QA Tester Assistant",
+          company: "BrightPath Tech",
+          companyInitials: "BT",
+          description: "Test website features, report bugs, and support regression checks. Screen-reader compatible tools can be provided when needed.",
+          location: "Remote / Cavite",
+          setup: "Remote",
+          vacancies: 2,
+          salary: "PHP 18,000 - PHP 24,000",
+          disabilityFit: "Physical / Visual Support",
+          postedDate: "Posted: Feb 20, 2026",
+          qualifications: [
+            "Basic understanding of web/app testing",
+            "Detail-oriented in checking outputs",
+            "Can document bugs clearly"
+          ],
+          responsibilities: [
+            "Run test cases and report defects",
+            "Record expected vs actual results",
+            "Support regression tests before release"
+          ]
+        }
       ],
       aboutImages: [
         { src: aboutPhoto, alt: "PWD worker collaborating in an inclusive workspace" },
@@ -696,6 +704,11 @@ computed: {
     ];
     const safeIndex = Math.max(0, Math.min(this.selectedTutorialIndex, links.length - 1));
     return `${links[safeIndex]}?autoplay=1&mute=0&playsinline=1&rel=0`;
+  },
+  selectedFeaturedJob() {
+    if (!Array.isArray(this.featuredJobPosts) || this.featuredJobPosts.length === 0) return null;
+    const safeIndex = Math.max(0, Math.min(this.selectedFeaturedJobIndex, this.featuredJobPosts.length - 1));
+    return this.featuredJobPosts[safeIndex];
   }
 },
 
@@ -726,6 +739,10 @@ onGlobalKeydown(e) {
   if (this.openDropdown) this.openDropdown = null;
   if (this.isMobileMenuOpen) this.closeMobileMenu();
   if (this.selectedTutorialIndex !== null) this.closeTutorialVideo();
+},
+
+selectFeaturedJob(index) {
+  this.selectedFeaturedJobIndex = index;
 },
 
 startAboutSlider() {
@@ -900,7 +917,6 @@ toggleFaq(i) {
     const query = {};
     if (this.heroFilters.keyword) query.keyword = this.heroFilters.keyword;
     if (this.heroFilters.location) query.location = this.heroFilters.location;
-    if (this.heroFilters.category) query.category = this.heroFilters.category;
 
     this.heroSearchLoading = true;
     try {
@@ -1797,7 +1813,7 @@ h1, h2, h3, h4, h5, h6{
   margin-top: 20px;
   max-width: 760px;
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
   background: #ffffff;
   border-radius: 999px;
   padding: 6px;
@@ -2384,6 +2400,14 @@ h2{
   flex-direction: column;
 }
 
+.about-cta-jobs-list {
+  min-width: 0;
+}
+
+.landing-job-detail-panel {
+  min-width: 0;
+}
+
 .about-cta-panel h4 {
   margin: 0;
   color: #10231a;
@@ -2455,6 +2479,151 @@ h2{
   gap: 10px;
 }
 
+.landing-job-preview-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.landing-job-card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.landing-job-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 22px rgba(15, 23, 42, 0.1);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.landing-job-card.is-active {
+  border-color: rgba(22, 163, 74, 0.55);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12), 0 14px 22px rgba(15, 23, 42, 0.1);
+}
+
+.landing-job-head {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.landing-job-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid #dbe7df;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef7f1 100%);
+  display: grid;
+  place-items: center;
+  color: #0f6a32;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.landing-job-logo-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 1rem;
+}
+
+.landing-job-title-wrap h5 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.landing-job-title-wrap p {
+  margin: 3px 0 0;
+  color: #475569;
+  font-size: 0.88rem;
+}
+
+.landing-job-desc {
+  margin: 12px 0 0;
+  color: #334155;
+  line-height: 1.52;
+  font-size: 0.86rem;
+}
+
+.landing-job-detail-head {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.landing-job-detail-desc {
+  margin: 12px 0 0;
+  color: #334155;
+  line-height: 1.58;
+  font-size: 0.9rem;
+}
+
+.landing-job-meta {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.landing-job-chip {
+  border: 1px solid #dbe3ea;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.landing-job-chip-accent {
+  border-color: #b7e3c6;
+  background: #edf9f1;
+  color: #166534;
+}
+
+.landing-job-detail-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.landing-job-detail-block {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.landing-job-detail-block h6 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 0.85rem;
+}
+
+.landing-job-detail-block ul {
+  margin: 0;
+  padding-left: 16px;
+  color: #475569;
+  line-height: 1.45;
+  font-size: 0.82rem;
+}
+
+.landing-job-detail-block li + li {
+  margin-top: 4px;
+}
+
 .about-cta-action {
   min-height: 42px;
   padding: 10px 12px;
@@ -2519,6 +2688,16 @@ h2{
   .about-cta-content {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .landing-job-detail-head {
+    grid-template-columns: 46px 1fr;
+  }
+
+  .landing-job-logo-lg {
+    width: 46px;
+    height: 46px;
+    font-size: 0.86rem;
   }
 }
 
@@ -2624,6 +2803,39 @@ h2{
 
   .about-cta-actions-grid{
     grid-template-columns: 1fr;
+  }
+
+  .landing-job-card {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .landing-job-head {
+    grid-template-columns: 40px 1fr;
+    gap: 8px;
+  }
+
+  .landing-job-logo {
+    width: 40px;
+    height: 40px;
+    font-size: 0.78rem;
+  }
+
+  .landing-job-title-wrap h5 {
+    font-size: 0.92rem;
+  }
+
+  .landing-job-title-wrap p {
+    font-size: 0.8rem;
+  }
+
+  .landing-job-desc {
+    font-size: 0.8rem;
+  }
+
+  .landing-job-chip {
+    font-size: 0.7rem;
+    padding: 5px 9px;
   }
 }
 

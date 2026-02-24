@@ -117,8 +117,13 @@
               <button type="button" class="action-btn view-btn" @click="openJobDetails(job)">
                 View
               </button>
-              <button type="button" class="action-btn apply-btn" @click="applyJobSoon">
-                Apply
+              <button
+                type="button"
+                class="action-btn apply-btn"
+                :disabled="applySubmittingJobId === String(job.id || '')"
+                @click="applyToJob(job)"
+              >
+                {{ applySubmittingJobId === String(job.id || "") ? "Applying..." : "Apply" }}
               </button>
             </div>
           </article>
@@ -151,7 +156,14 @@
           </div>
           <div class="detail-actions">
             <button type="button" class="action-btn view-btn" @click="closeJobDetails">Close</button>
-            <button type="button" class="action-btn apply-btn" @click="applyJobSoon">Apply</button>
+            <button
+              type="button"
+              class="action-btn apply-btn"
+              :disabled="!selectedJob || applySubmittingJobId === String(selectedJob.id || '')"
+              @click="applyToJob(selectedJob)"
+            >
+              {{ applySubmittingJobId === String(selectedJob?.id || "") ? "Applying..." : "Apply" }}
+            </button>
           </div>
         </article>
       </div>
@@ -201,7 +213,9 @@
 <script>
 import logoDefault from "@/assets/proximity.png";
 import footerLogo from "@/assets/proximity.png";
-import { db, collection, onSnapshot } from "@/lib/laravel-data";
+import { addDoc, db, collection, onSnapshot, serverTimestamp } from "@/lib/laravel-data";
+import Toastify from "toastify-js";
+import "toastify-js/src/toastify.css";
 
 export default {
   name: "SearchJobsPage",
@@ -219,6 +233,7 @@ export default {
       allJobs: [],
       jobsUnsubscribe: null,
       selectedJob: null,
+      applySubmittingJobId: "",
     };
   },
   computed: {
@@ -264,6 +279,19 @@ export default {
     document.removeEventListener("click", this.closeDropdown);
   },
   methods: {
+    showToast(text, background = "#0f172a") {
+      Toastify({
+        text,
+        duration: 2600,
+        gravity: "top",
+        position: "right",
+        stopOnFocus: true,
+        close: true,
+        style: {
+          background,
+        },
+      }).showToast();
+    },
     toggleAboutDropdown() {
       this.openDropdown =
         this.openDropdown === "about-menu" ? null : "about-menu";
@@ -291,8 +319,77 @@ export default {
     closeJobDetails() {
       this.selectedJob = null;
     },
-    applyJobSoon() {
-      window.alert("Apply feature is coming soon.");
+    async applyToJob(job) {
+      const targetJob = job || this.selectedJob;
+      const jobId = String(targetJob?.id || "").trim();
+      if (!jobId) {
+        this.showToast("Invalid job selection.", "#dc2626");
+        return;
+      }
+
+      const applicantId = String(
+        localStorage.getItem("userUid") ||
+        localStorage.getItem("uid") ||
+        ""
+      ).trim();
+      const applicantEmail = String(
+        localStorage.getItem("userEmail") ||
+        localStorage.getItem("email") ||
+        ""
+      ).trim();
+      const applicantName = String(
+        localStorage.getItem("userName") ||
+        localStorage.getItem("fullName") ||
+        localStorage.getItem("name") ||
+        ""
+      ).trim();
+      const userRole = String(localStorage.getItem("userRole") || "").trim().toLowerCase();
+      const profileCompleted = String(localStorage.getItem("userProfileCompleted") || "").trim().toLowerCase() === "true";
+
+      if (!applicantId && !applicantEmail) {
+        this.showToast("Please register as applicant before applying. Redirecting...", "#f59e0b");
+        window.setTimeout(() => {
+          this.$router.push({
+            path: "/register",
+            query: {
+              role: "applicant",
+              redirect: this.$route.fullPath || "/search-jobs",
+            },
+          });
+        }, 700);
+        return;
+      }
+
+      if (userRole === "applicant" && !profileCompleted) {
+        this.showToast("Please complete your account information first. Redirecting to onboarding...", "#f59e0b");
+        window.setTimeout(() => {
+          this.$router.push("/applicant/onboarding");
+        }, 700);
+        return;
+      }
+
+      this.applySubmittingJobId = jobId;
+      try {
+        await addDoc(collection(db, "applications"), {
+          jobId,
+          jobTitle: String(targetJob?.title || "Untitled Job").trim(),
+          applicantId: applicantId || null,
+          applicantName: applicantName || applicantEmail || "Applicant",
+          applicantEmail: applicantEmail || null,
+          appliedAt: serverTimestamp(),
+          status: "pending",
+        });
+
+        this.showToast("Application submitted successfully.", "#16a34a");
+      } catch (err) {
+        const message =
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to submit application.";
+        this.showToast(message, "#dc2626");
+      } finally {
+        this.applySubmittingJobId = "";
+      }
     },
     startJobsFeed() {
       this.jobsLoading = true;
