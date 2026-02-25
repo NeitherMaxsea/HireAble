@@ -187,6 +187,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import SidebarApplicant from "@/components/sb-applicant.vue"
+import api from "@/services/api"
 import { db } from "@/lib/client-platform"
 import { collection, onSnapshot, query, where } from "@/lib/laravel-data"
 
@@ -203,7 +204,9 @@ const activeNotification = ref(null)
 const notifications = ref([])
 const notificationsUnsubscribe = ref(null)
 const applicantIdentity = ref({ id: "", email: "" })
-const lastSeenMillis = ref(0)
+const seenNotificationIds = ref([])
+const interviewDateCounts = ref({})
+const interviewRefreshTimer = ref(null)
 
 const updateTime = () => {
   now.value = new Date()
@@ -223,9 +226,12 @@ onMounted(() => {
   const userId = String(localStorage.getItem("userUid") || localStorage.getItem("uid") || "").trim()
   const userEmail = String(localStorage.getItem("userEmail") || "").trim().toLowerCase()
   applicantIdentity.value = { id: userId, email: userEmail }
+  void loadInterviewDateCounts(userId, userEmail)
+  interviewRefreshTimer.value = setInterval(() => {
+    void loadInterviewDateCounts(userId, userEmail)
+  }, 10000)
 
-  const cachedLastSeen = Number(localStorage.getItem(notificationStorageKey.value) || 0)
-  lastSeenMillis.value = Number.isFinite(cachedLastSeen) ? cachedLastSeen : 0
+  loadSeenNotificationIds()
 
   let notificationsTarget = null
   if (userId) {
@@ -252,7 +258,7 @@ onMounted(() => {
           type: status,
           timestampMillis,
         }
-      })
+      }).filter((row) => ["accepted", "rejected"].includes(String(row.type || "").toLowerCase()))
 
       notifications.value = rows.sort((a, b) => b.timestampMillis - a.timestampMillis)
     }, () => {
@@ -268,6 +274,9 @@ onBeforeUnmount(() => {
   }
   if (typeof notificationsUnsubscribe.value === "function") {
     notificationsUnsubscribe.value()
+  }
+  if (interviewRefreshTimer.value) {
+    clearInterval(interviewRefreshTimer.value)
   }
 })
 
@@ -305,7 +314,7 @@ const notificationStorageKey = computed(() => {
 const latestNotifications = computed(() => notifications.value.slice(0, 3))
 
 const unreadNotificationsCount = computed(() =>
-  notifications.value.filter((item) => item.timestampMillis > lastSeenMillis.value).length
+  notifications.value.filter((item) => !hasSeenNotification(item.id)).length
 )
 
 const hasNewNotifications = computed(() => unreadNotificationsCount.value > 0)
@@ -397,7 +406,37 @@ function toDateKey(dateObj) {
 
 function eventCountByDate(dateObj) {
   const key = toDateKey(dateObj)
-  return notifications.value.filter(event => event.dateKey === key).length
+  const notificationCount = notifications.value.filter(event => event.dateKey === key).length
+  const interviewCount = Number(interviewDateCounts.value[key] || 0)
+  return notificationCount + interviewCount
+}
+
+async function loadInterviewDateCounts(userId, userEmail) {
+  if (!userId && !userEmail) {
+    interviewDateCounts.value = {}
+    return
+  }
+
+  const params = {}
+  if (userId) params.applicantId = userId
+  if (userEmail) params.applicantEmail = userEmail
+
+  try {
+    const res = await api.get("/interview-schedules", { params })
+    const rows = Array.isArray(res?.data) ? res.data : []
+    const counts = {}
+    rows.forEach((row) => {
+      const status = String(row?.scheduleStatus || "scheduled").trim().toLowerCase()
+      if (status === "cancelled") return
+      const ms = toMillis(row?.scheduledAt)
+      if (!ms) return
+      const key = toDateKey(new Date(ms))
+      counts[key] = (counts[key] || 0) + 1
+    })
+    interviewDateCounts.value = counts
+  } catch {
+    interviewDateCounts.value = {}
+  }
 }
 
 function openNotification(event) {
@@ -410,14 +449,35 @@ function openNotification(event) {
 }
 
 function persistLastSeen(value) {
-  const safeValue = Number.isFinite(value) ? Math.max(0, value) : 0
-  localStorage.setItem(notificationStorageKey.value, String(safeValue))
+  const next = Array.from(
+    new Set(Array.isArray(value) ? value.map((id) => String(id || "").trim()).filter(Boolean) : [])
+  )
+  seenNotificationIds.value = next
+  localStorage.setItem(notificationStorageKey.value, JSON.stringify(next))
+}
+
+function loadSeenNotificationIds() {
+  try {
+    const raw = localStorage.getItem(notificationStorageKey.value)
+    const parsed = JSON.parse(raw || "[]")
+    seenNotificationIds.value = Array.isArray(parsed)
+      ? parsed.map((id) => String(id || "").trim()).filter(Boolean)
+      : []
+  } catch {
+    seenNotificationIds.value = []
+  }
+}
+
+function hasSeenNotification(id) {
+  const key = String(id || "").trim()
+  if (!key) return false
+  return seenNotificationIds.value.includes(key)
 }
 
 function markNotificationsAsSeen() {
-  const latestTimestamp = notifications.value[0]?.timestampMillis || Date.now()
-  lastSeenMillis.value = latestTimestamp
-  persistLastSeen(latestTimestamp)
+  if (!notifications.value.length) return
+  const currentIds = notifications.value.map((item) => String(item.id || "").trim()).filter(Boolean)
+  persistLastSeen([...(seenNotificationIds.value || []), ...currentIds])
 }
 
 function handleNotificationBellClick() {
@@ -459,6 +519,23 @@ function toMillis(value) {
   const normalized = String(value).trim()
   if (!normalized) return 0
 
+  // Treat Laravel/MySQL naive datetime strings as UTC (backend commonly stores UTC).
+  const sqlMatch = normalized.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/
+  )
+  if (sqlMatch) {
+    const [, y, m, d, hh, mm, ss = "0"] = sqlMatch
+    const utcMs = Date.UTC(
+      Number(y),
+      Number(m) - 1,
+      Number(d),
+      Number(hh),
+      Number(mm),
+      Number(ss)
+    )
+    if (Number.isFinite(utcMs)) return utcMs
+  }
+
   const direct = new Date(normalized)
   if (!Number.isNaN(direct.getTime())) return direct.getTime()
 
@@ -477,15 +554,13 @@ function normalizeNotificationType(status) {
   const normalized = String(status || "").trim().toLowerCase()
   if (["accepted", "approved", "hired"].includes(normalized)) return "accepted"
   if (["rejected", "declined", "denied"].includes(normalized)) return "rejected"
-  if (normalized === "pending") return "pending"
-  return "application"
+  return "other"
 }
 
 function buildNotificationTitle(type, jobTitle) {
   if (type === "accepted") return `Application accepted: ${jobTitle}`
   if (type === "rejected") return `Application update: ${jobTitle}`
-  if (type === "pending") return `Application pending: ${jobTitle}`
-  return `Application submitted: ${jobTitle}`
+  return `Application update: ${jobTitle}`
 }
 
 function formatRelativeTime(timestampMillis) {

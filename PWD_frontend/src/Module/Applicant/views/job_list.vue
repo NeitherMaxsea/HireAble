@@ -1,15 +1,88 @@
 <template>
-  <div class="dashboard">
+  <div class="applicant-job-list-page">
+    <transition name="intro-fade">
+      <div v-if="showWelcomeOverlay" class="intro-overlay">
+        <div class="intro-card">
+          <p class="intro-eyebrow">Applicant Portal</p>
+          <h2>Welcome to {{ systemName }}</h2>
+          <p>{{ welcomeName ? `Hello, ${welcomeName}.` : "Welcome back." }} Preparing your job feed...</p>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="intro-fade">
+      <div v-if="showSkillsOverlay" class="intro-overlay skills-overlay">
+        <div class="skills-picker-card">
+          <div class="skills-picker-head">
+            <div>
+              <p class="intro-eyebrow">Job Preferences</p>
+              <h3>Select skills / roles you are looking for</h3>
+              <p>Choose one or more. We will show job posts based on your selection.</p>
+            </div>
+          </div>
+
+          <div class="skills-grid">
+            <label
+              v-for="skill in skillOptions"
+              :key="skill"
+              class="skill-option"
+              :class="{ active: selectedSkills.includes(skill) }"
+            >
+              <input
+                type="checkbox"
+                :checked="selectedSkills.includes(skill)"
+                @change="toggleSkill(skill)"
+              />
+              <span>{{ skill }}</span>
+            </label>
+          </div>
+
+          <div class="skills-actions">
+            <button class="skip-btn" type="button" @click="continueWithoutSkills">
+              Show all jobs
+            </button>
+            <button class="continue-btn" type="button" @click="confirmSkillsSelection">
+              Continue ({{ selectedSkills.length }})
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+  <div class="dashboard" :class="{ 'intro-locked': showWelcomeOverlay || showSkillsOverlay }">
     <!-- LEFT -->
     <section class="job-list">
       <h2>Available Jobs</h2>
 
-      <p v-if="jobs.length === 0" class="empty">
+      <div class="list-filters">
+        <div class="filter-input-wrap">
+          <i class="bi bi-search"></i>
+          <input
+            v-model.trim="jobSearchKeyword"
+            type="text"
+            placeholder="Search keywords (job, company, location)"
+          />
+        </div>
+
+        <select v-model="jobDisabilityFilter" class="filter-select">
+          <option value="all">All disability types</option>
+          <option v-for="opt in jobDisabilityOptions" :key="opt" :value="opt">
+            {{ opt }}
+          </option>
+        </select>
+      </div>
+
+      <div v-if="isJobsLoading" class="panel-loading">
+        <div class="panel-spinner"></div>
+        <p>Loading job posts...</p>
+      </div>
+
+      <p v-else-if="displayJobs.length === 0" class="empty">
         No job posts available
       </p>
 
       <div
-        v-for="job in jobs"
+        v-for="job in displayJobs"
         :key="job.id"
         class="job-card"
         :class="{ active: selectedJob?.id === job.id }"
@@ -52,7 +125,12 @@
 
     <!-- RIGHT -->
     <section class="job-preview">
-      <div v-if="jobs.length === 0" class="empty">
+      <div v-if="isJobsLoading" class="panel-loading right">
+        <div class="panel-spinner"></div>
+        <p>Preparing job details...</p>
+      </div>
+
+      <div v-else-if="displayJobs.length === 0" class="empty">
         No job posts available
       </div>
 
@@ -132,12 +210,24 @@
         <!-- RIGHT MAP + PHOTO -->
         <div class="map-right">
           <!-- MAP -->
-          <iframe
+          <div
             v-if="selectedJob.location"
-            :src="mapUrl"
-            loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"
-          ></iframe>
+            class="map-preview-wrap"
+            role="button"
+            tabindex="0"
+            @click="openMapModal"
+            @keydown.enter.prevent="openMapModal"
+            @keydown.space.prevent="openMapModal"
+          >
+            <iframe
+              :src="mapUrl"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
+            <div class="map-click-overlay">
+              <span>Click to view location</span>
+            </div>
+          </div>
 
           <p v-else class="empty">No location provided</p>
 
@@ -199,6 +289,28 @@
       </div>
     </div>
   </transition>
+
+  <transition name="lb-fade">
+    <div v-if="showMapModal" class="lightbox map-lightbox" @click.self="closeMapModal">
+      <div class="map-modal-card">
+        <div class="map-modal-head">
+          <div>
+            <p class="map-modal-label">Job Location</p>
+            <h3>{{ selectedJob?.location || "Not specified" }}</h3>
+          </div>
+          <button class="lb-close" @click="closeMapModal" aria-label="Close map">×</button>
+        </div>
+        <iframe
+          v-if="selectedJob?.location"
+          :src="mapUrl"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+          class="map-modal-frame"
+        ></iframe>
+      </div>
+    </div>
+  </transition>
+  </div>
 </template>
 
 <script setup>
@@ -209,10 +321,17 @@ import Toastify from "toastify-js"
 import "toastify-js/src/toastify.css"
 
 const jobs = ref([])
+const isJobsLoading = ref(true)
 const selectedJob = ref(null)
 const applicantId = ref("")
 const applicantEmail = ref("")
 const appliedJobIds = ref(new Set())
+const jobSearchKeyword = ref("")
+const jobDisabilityFilter = ref("all")
+const selectedSkills = ref([])
+const showWelcomeOverlay = ref(false)
+const showSkillsOverlay = ref(false)
+const showMapModal = ref(false)
 const currentPhotoIndex = ref(0)
 const isLightboxOpen = ref(false)
 let unsubscribeJobs = null
@@ -222,6 +341,7 @@ onMounted(() => {
   applicantId.value = String(
     localStorage.getItem("userUid") ||
     localStorage.getItem("uid") ||
+    localStorage.getItem("sessionUid") ||
     ""
   ).trim()
   applicantEmail.value = String(localStorage.getItem("userEmail") || "")
@@ -259,15 +379,21 @@ onMounted(() => {
             job.imageURL2 ||
             job.photo2 ||
             images[1] ||
-            ""
+            "",
+          statusNormalized: normalizeJobStatus(job.status),
+          financeApprovalNormalized: normalizeFinanceApproval(job),
         }
       })
-      .filter(job => job.status === "open")
+      .filter((job) => isVisibleToApplicant(job))
       .sort((a, b) => getCreatedAtMillis(b.createdAt) - getCreatedAtMillis(a.createdAt))
 
     if (selectedJob.value) {
       selectedJob.value = jobs.value.find(j => j.id === selectedJob.value.id) || null
     }
+    isJobsLoading.value = false
+  }, () => {
+    jobs.value = []
+    isJobsLoading.value = false
   })
 
   let appsTarget = collection(db, "applications")
@@ -303,6 +429,8 @@ onMounted(() => {
   }, () => {
     appliedJobIds.value = new Set()
   })
+
+  runIntroSequence()
 })
 
 onBeforeUnmount(() => {
@@ -316,26 +444,250 @@ onBeforeUnmount(() => {
 
 const getCreatedAtMillis = (ts) => {
   if (!ts) return 0
+  if (typeof ts === "string") {
+    const raw = ts.trim()
+    if (!raw) return 0
+    const parsed = Date.parse(raw.includes("T") ? raw : raw.replace(" ", "T"))
+    return Number.isFinite(parsed) ? parsed : 0
+  }
   if (typeof ts?.toMillis === "function") return ts.toMillis()
   if (typeof ts?.seconds === "number") return ts.seconds * 1000
   if (ts instanceof Date) return ts.getTime()
   return 0
 }
 
-// auto clear if deleted
-watch(jobs, (newJobs) => {
+const normalizeJobStatus = (status) => String(status || "").trim().toLowerCase()
+
+const normalizeFinanceApproval = (job) => {
+  const direct = String(job?.financeApprovalStatus || job?.finance_approval_status || "").trim().toLowerCase()
+  if (["approved", "rejected", "pending"].includes(direct)) return direct
+
+  const status = normalizeJobStatus(job?.status)
+  if (status === "open" || status === "closed") return "approved"
+  if (status === "finance_rejected") return "rejected"
+  if (status.includes("pending")) return "pending"
+  return "pending"
+}
+
+const isVisibleToApplicant = (job) => {
+  const status = normalizeJobStatus(job?.statusNormalized || job?.status)
+  const approval = normalizeFinanceApproval(job)
+  if (["open", "approved", "published", "active"].includes(status)) return true
+  if (status === "closed") return false
+  if (status === "finance_rejected") return false
+  return approval === "approved"
+}
+
+const systemName = "HireAble"
+const welcomeName = computed(() =>
+  String(localStorage.getItem("userName") || localStorage.getItem("name") || "Applicant").trim()
+)
+
+const defaultSkillOptions = [
+  "Cashier",
+  "Encoder / Data Entry",
+  "Office Staff",
+  "Administrative Assistant",
+  "Customer Service",
+  "Chat Support",
+  "Service Crew",
+  "Production Worker",
+  "Warehouse Assistant",
+  "Packing Staff",
+  "Sales Associate",
+  "Security Guard",
+  "Housekeeping",
+  "Remote Work",
+]
+
+const skillOptions = computed(() => {
+  const fromJobs = jobs.value.flatMap((job) => {
+    const values = []
+    const title = String(job.title || "").trim()
+    const category = String(job.category || "").trim()
+    const disabilityType = String(job.disabilityType || "").trim()
+    if (title) values.push(title)
+    if (category) values.push(category)
+    if (disabilityType) values.push(disabilityType)
+    return values
+  })
+
+  return [...new Set([...defaultSkillOptions, ...fromJobs].filter(Boolean))].slice(0, 40)
+})
+
+const displayJobs = computed(() => {
+  const keyword = jobSearchKeyword.value.trim().toLowerCase()
+  const picked = selectedSkills.value.map((s) => String(s || "").toLowerCase())
+  const base = jobs.value.filter((job) => {
+    const disabilityValue = String(job.disabilityType || job.disability || "").trim()
+    const haystack = [
+      job.title,
+      job.description,
+      job.department,
+      job.companyName,
+      job.location,
+      job.disabilityType,
+      job.category,
+      job.type,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+
+    const keywordMatch = !keyword || haystack.includes(keyword)
+    const disabilityMatch =
+      jobDisabilityFilter.value === "all" ||
+      disabilityValue.toLowerCase() === String(jobDisabilityFilter.value || "").toLowerCase()
+
+    return keywordMatch && disabilityMatch
+  })
+
+  const withSkillFilter = base.filter((job) => {
+    const haystack = [
+      job.title,
+      job.description,
+      job.department,
+      job.companyName,
+      job.location,
+      job.disabilityType,
+      job.category,
+      job.type,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+
+    const skillMatch = !picked.length || picked.some((skill) => haystack.includes(skill))
+    return skillMatch
+  })
+
+  // If stored skills are too restrictive, don't hide all jobs from applicant.
+  if (picked.length > 0 && withSkillFilter.length === 0) {
+    return base
+  }
+
+  return withSkillFilter
+})
+
+const jobDisabilityOptions = computed(() => {
+  return [...new Set(
+    jobs.value
+      .map((j) => String(j.disabilityType || j.disability || "").trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b))
+})
+
+function getApplicantSkillPrefKey() {
+  const uid = String(localStorage.getItem("userUid") || localStorage.getItem("uid") || localStorage.getItem("sessionUid") || "").trim()
+  const email = String(localStorage.getItem("userEmail") || "").trim().toLowerCase()
+  if (uid) return `applicantSkillsPref:${uid}`
+  if (email) return `applicantSkillsPref:${email}`
+  return "applicantSkillsPref"
+}
+
+function getApplicantIntroSeenKey() {
+  const uid = String(localStorage.getItem("userUid") || localStorage.getItem("uid") || localStorage.getItem("sessionUid") || "").trim()
+  const email = String(localStorage.getItem("userEmail") || "").trim().toLowerCase()
+  if (uid) return `applicantIntroShown:${uid}`
+  if (email) return `applicantIntroShown:${email}`
+  return "applicantIntroShown"
+}
+
+function hasSeenApplicantIntro() {
+  try {
+    return localStorage.getItem(getApplicantIntroSeenKey()) === "1"
+  } catch {
+    return false
+  }
+}
+
+function markApplicantIntroSeen() {
+  try {
+    localStorage.setItem(getApplicantIntroSeenKey(), "1")
+  } catch {
+    // ignore localStorage errors
+  }
+}
+
+function loadSelectedSkills() {
+  try {
+    const raw = localStorage.getItem(getApplicantSkillPrefKey())
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      selectedSkills.value = parsed.filter(Boolean).map((x) => String(x).trim()).filter(Boolean)
+    }
+  } catch {
+    selectedSkills.value = []
+  }
+}
+
+function saveSelectedSkills() {
+  try {
+    localStorage.setItem(getApplicantSkillPrefKey(), JSON.stringify(selectedSkills.value))
+  } catch {
+    // ignore localStorage errors
+  }
+}
+
+function toggleSkill(skill) {
+  const key = String(skill || "").trim()
+  if (!key) return
+  const next = [...selectedSkills.value]
+  const index = next.indexOf(key)
+  if (index >= 0) next.splice(index, 1)
+  else next.push(key)
+  selectedSkills.value = next
+}
+
+function continueWithoutSkills() {
+  selectedSkills.value = []
+  saveSelectedSkills()
+  showSkillsOverlay.value = false
+}
+
+function confirmSkillsSelection() {
+  if (!selectedSkills.value.length) {
+    showToast("Select at least one skill, or click Show all jobs.", "#f59e0b")
+    return
+  }
+  saveSelectedSkills()
+  showSkillsOverlay.value = false
+}
+
+async function runIntroSequence() {
+  loadSelectedSkills()
+  if (hasSeenApplicantIntro()) {
+    showWelcomeOverlay.value = false
+    showSkillsOverlay.value = false
+    return
+  }
+  showWelcomeOverlay.value = true
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+  showWelcomeOverlay.value = false
+  await new Promise((resolve) => setTimeout(resolve, 180))
+  showSkillsOverlay.value = true
+  markApplicantIntroSeen()
+}
+
+// auto clear if deleted / filtered out
+watch(displayJobs, (newJobs) => {
   if (
     selectedJob.value &&
     !newJobs.find(j => j.id === selectedJob.value.id)
   ) {
     selectedJob.value = null
   }
+
+  if (!selectedJob.value && newJobs.length) {
+    selectedJob.value = newJobs[0]
+  }
 })
 
-  const selectJob = (job) => {
-    selectedJob.value = job
-    currentPhotoIndex.value = 0
-  }
+const selectJob = (job) => {
+  selectedJob.value = job
+  currentPhotoIndex.value = 0
+}
 
 // GOOGLE MAP URL
 const mapUrl = computed(() => {
@@ -365,6 +717,15 @@ const openGallery = (url) => {
 
 const closeGallery = () => {
   isLightboxOpen.value = false
+}
+
+const openMapModal = () => {
+  if (!selectedJob.value?.location) return
+  showMapModal.value = true
+}
+
+const closeMapModal = () => {
+  showMapModal.value = false
 }
 
 const prevPhoto = () => {
@@ -407,6 +768,7 @@ const applyJob = async () => {
     const applicantIdValue = String(
       localStorage.getItem("userUid") ||
       localStorage.getItem("uid") ||
+      localStorage.getItem("sessionUid") ||
       ""
     ).trim()
     const applicantName = String(localStorage.getItem("userName") || "").trim()
@@ -438,6 +800,182 @@ const applyJob = async () => {
 </script>
 
 <style scoped>
+.applicant-job-list-page{
+  position:relative;
+  min-height:100%;
+}
+
+.intro-overlay{
+  position:fixed;
+  inset:0;
+  z-index:3000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(8px);
+}
+
+.intro-card{
+  width:min(560px, 92vw);
+  background:linear-gradient(180deg, #0f6b34, #0b5127);
+  color:#fff;
+  border-radius:22px;
+  padding:28px 30px;
+  box-shadow:0 24px 60px rgba(2, 6, 23, 0.28);
+  border:1px solid rgba(255,255,255,0.12);
+  text-align:left;
+}
+
+.intro-eyebrow{
+  margin:0 0 8px;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,0.82);
+}
+
+.intro-card h2{
+  margin:0 0 8px;
+  font-size:28px;
+  line-height:1.15;
+}
+
+.intro-card p{
+  margin:0;
+  color:rgba(255,255,255,0.92);
+}
+
+.skills-overlay{
+  align-items:flex-start;
+  padding-top:76px;
+}
+
+.skills-picker-card{
+  width:min(980px, 95vw);
+  max-height:calc(100vh - 120px);
+  overflow:hidden;
+  background:#ffffff;
+  border-radius:20px;
+  border:1px solid #dbe3ef;
+  box-shadow:0 22px 64px rgba(2, 6, 23, 0.22);
+  display:flex;
+  flex-direction:column;
+}
+
+.skills-picker-head{
+  padding:20px 22px 14px;
+  border-bottom:1px solid #e5e7eb;
+  background:linear-gradient(180deg, #f6fbf7, #ffffff);
+}
+
+.skills-picker-head h3{
+  margin:0 0 6px;
+  color:#0f172a;
+  font-size:22px;
+}
+
+.skills-picker-head p:last-child{
+  margin:0;
+  color:#64748b;
+  font-size:14px;
+}
+
+.skills-grid{
+  padding:18px 22px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+  gap:12px;
+  overflow:auto;
+}
+
+.skill-option{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1px solid #dbe3ef;
+  border-radius:14px;
+  padding:12px 14px;
+  background:#f8fafc;
+  cursor:pointer;
+  transition:.18s ease;
+  min-height:52px;
+}
+
+.skill-option:hover{
+  border-color:#86efac;
+  background:#f0fdf4;
+}
+
+.skill-option.active{
+  border-color:#22c55e;
+  background:#ecfdf5;
+  box-shadow:0 0 0 2px rgba(34, 197, 94, 0.10) inset;
+}
+
+.skill-option input{
+  width:16px;
+  height:16px;
+  accent-color:#16a34a;
+  margin:0;
+  flex:0 0 auto;
+}
+
+.skill-option span{
+  color:#0f172a;
+  font-weight:600;
+  font-size:13px;
+  line-height:1.25;
+}
+
+.skills-actions{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px 22px 18px;
+  border-top:1px solid #e5e7eb;
+  background:#fff;
+}
+
+.skip-btn,
+.continue-btn{
+  border:none;
+  border-radius:12px;
+  padding:12px 16px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.skip-btn{
+  background:#eef2f7;
+  color:#334155;
+}
+
+.continue-btn{
+  background:linear-gradient(135deg, #15803d, #22c55e);
+  color:#fff;
+  min-width:170px;
+  box-shadow:0 10px 24px rgba(22, 163, 74, 0.22);
+}
+
+.intro-locked{
+  pointer-events:none;
+  user-select:none;
+  filter: blur(1px);
+}
+
+.intro-fade-enter-active,
+.intro-fade-leave-active{
+  transition:opacity .28s ease;
+}
+
+.intro-fade-enter-from,
+.intro-fade-leave-to{
+  opacity:0;
+}
+
 .dashboard{
   display:flex;
   gap:20px;
@@ -741,6 +1279,75 @@ const applyJob = async () => {
   border-radius:12px;
 }
 
+.list-filters{
+  display:grid;
+  gap:8px;
+  margin:10px 0 12px;
+}
+
+.filter-input-wrap{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  align-items:center;
+  gap:8px;
+  border:1px solid #dbe4ee;
+  border-radius:10px;
+  background:#f8fafc;
+  min-height:40px;
+  padding:0 10px;
+}
+
+.filter-input-wrap i{
+  color:#64748b;
+  font-size:13px;
+}
+
+.filter-input-wrap input{
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#0f172a;
+  font-size:12px;
+  min-width:0;
+}
+
+.filter-select{
+  min-height:40px;
+  border:1px solid #dbe4ee;
+  border-radius:10px;
+  background:#ffffff;
+  color:#334155;
+  font-size:12px;
+  padding:0 10px;
+  outline:none;
+}
+
+.map-preview-wrap{
+  position:relative;
+  border-radius:12px;
+  overflow:hidden;
+  cursor:pointer;
+}
+
+.map-click-overlay{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:flex-end;
+  justify-content:flex-end;
+  padding:10px;
+  background:linear-gradient(to top, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.02) 36%, transparent 70%);
+}
+
+.map-click-overlay span{
+  background:rgba(15, 23, 42, 0.75);
+  color:#fff;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:11px;
+  font-weight:600;
+}
+
 /* IMAGE */
 .job-photo{
   width:100%;
@@ -880,6 +1487,50 @@ const applyJob = async () => {
   background:#1d4ed8;
 }
 
+.map-lightbox{
+  padding:24px;
+}
+
+.map-modal-card{
+  width:min(1000px, 94vw);
+  background:#fff;
+  border-radius:16px;
+  overflow:hidden;
+  border:1px solid #e5e7eb;
+  box-shadow:0 18px 44px rgba(0,0,0,0.28);
+}
+
+.map-modal-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  padding:16px 18px 12px;
+  border-bottom:1px solid #e5e7eb;
+}
+
+.map-modal-label{
+  margin:0 0 4px;
+  font-size:11px;
+  color:#64748b;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+.map-modal-head h3{
+  margin:0;
+  font-size:18px;
+  color:#0f172a;
+}
+
+.map-modal-frame{
+  width:100%;
+  height:min(68vh, 560px);
+  border:0;
+  display:block;
+}
+
 .apply-btn.disabled,
 .apply-btn:disabled{
   background:#9ca3af;
@@ -890,6 +1541,47 @@ const applyJob = async () => {
 .empty{
   color:#9ca3af;
   font-style:italic;
+}
+
+.panel-loading{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  min-height: calc(100vh - 260px);
+  color:#64748b;
+  text-align:center;
+  border:1px dashed #dbe4ee;
+  border-radius:12px;
+  background:#f8fafc;
+  margin-top:8px;
+  width:100%;
+}
+
+.panel-loading.right{
+  min-height: calc(100vh - 240px);
+  width:100%;
+  max-width:900px;
+}
+
+.panel-loading p{
+  margin:0;
+  font-size:13px;
+  font-weight:600;
+}
+
+.panel-spinner{
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  border:3px solid #dbe4ee;
+  border-top-color:#16a34a;
+  animation: panelSpin .75s linear infinite;
+}
+
+@keyframes panelSpin{
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 1100px) {
@@ -903,6 +1595,31 @@ const applyJob = async () => {
 
   .map-layout{
     grid-template-columns:1fr;
+  }
+
+  .panel-loading{
+    min-height:220px;
+  }
+
+  .panel-loading.right{
+    min-height:260px;
+  }
+
+  .skills-overlay{
+    padding-top:24px;
+  }
+
+  .skills-picker-card{
+    max-height:calc(100vh - 48px);
+  }
+
+  .skills-actions{
+    flex-direction:column-reverse;
+  }
+
+  .skip-btn,
+  .continue-btn{
+    width:100%;
   }
 }
 </style>

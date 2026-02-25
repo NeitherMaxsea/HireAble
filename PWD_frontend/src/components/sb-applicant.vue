@@ -1,21 +1,15 @@
 <template>
   <aside class="sidebar" :class="{ collapsed: isCollapsed, 'mobile-open': mobileOpen }">
 
-    <!-- LOGO -->
+    <!-- APPLICANT HEADER -->
     <div class="brand">
-      <img
-        v-if="!isCollapsed"
-        src="@/assets/titlelogo.png"
-        alt="PWD Portal"
-      />
-      <img
-        v-else
-        src="@/assets/whitelogo.png"
-        class="mini-logo"
-
-      style="width: 40px;"
-        alt="PWD Portal"
-      />
+      <template v-if="!isCollapsed">
+        <p class="applicant-name">{{ applicantName }}</p>
+        <p class="applicant-email">{{ applicantEmail }}</p>
+      </template>
+      <div v-else class="mini-user-badge" :title="applicantName">
+        {{ applicantInitial }}
+      </div>
     </div>
 
     <!-- MENU -->
@@ -36,24 +30,14 @@
         <span v-if="!isCollapsed">Interviews</span>
       </router-link>
 
-      <router-link to="/applicant/training-progress" class="menu-item" @click="closeMobile">
-        <i class="bi bi-graph-up-arrow icon"></i>
-        <span v-if="!isCollapsed">Training Progress</span>
-      </router-link>
-
-      <router-link to="/applicant/notifications" class="menu-item" @click="closeMobile">
-        <i class="bi bi-bell icon"></i>
-        <span v-if="!isCollapsed">Notifications</span>
-      </router-link>
-
       <router-link to="/applicant/profile" class="menu-item" @click="closeMobile">
         <i class="bi bi-person icon"></i>
         <span v-if="!isCollapsed">Profile</span>
       </router-link>
 
-      <router-link to="/applicant/accessibility" class="menu-item" @click="closeMobile">
-        <i class="bi bi-universal-access icon"></i>
-        <span v-if="!isCollapsed">Accessibility</span>
+      <router-link to="/applicant/messages" class="menu-item" @click="closeMobile">
+        <i class="bi bi-chat-dots icon"></i>
+        <span v-if="!isCollapsed">Messages</span>
       </router-link>
 
     </nav>
@@ -98,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue"
+import { computed, ref } from "vue"
 import { useRouter } from "vue-router"
 import { signOut } from "@/lib/session-auth"
 import { doc, serverTimestamp, updateDoc } from "@/lib/laravel-data"
@@ -118,6 +102,19 @@ const router = useRouter()
 const isCollapsed = ref(false)
 const showLogoutConfirm = ref(false)
 const logoutLoading = ref(false)
+
+const applicantName = computed(() =>
+  String(localStorage.getItem("userName") || localStorage.getItem("name") || "Applicant").trim() || "Applicant"
+)
+
+const applicantEmail = computed(() =>
+  String(localStorage.getItem("userEmail") || "No email").trim() || "No email"
+)
+
+const applicantInitial = computed(() => {
+  const base = applicantName.value || applicantEmail.value || "A"
+  return String(base).trim().charAt(0).toUpperCase() || "A"
+})
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
@@ -156,7 +153,6 @@ const logout = async () => {
       // continue local logout even if auth signout request fails
     }
 
-    localStorage.clear()
     showLogoutConfirm.value = false
     emit("close-mobile")
     await router.replace({ path: "/login", query: { force: "1" } })
@@ -187,8 +183,11 @@ const logout = async () => {
   align-self: flex-start;
   flex-shrink: 0;
   overflow: hidden;
-  background: #5f6f73;
-  color: #f9fafb;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(34, 197, 94, 0.22), transparent 42%),
+    radial-gradient(circle at 88% 0%, rgba(244, 196, 31, 0.12), transparent 34%),
+    linear-gradient(180deg, #0f4f25 0%, #0d3f1f 56%, #0b351a 100%);
+  color: #f8fafc;
   display: flex;
   flex-direction: column;
   padding: 20px 14px;
@@ -203,16 +202,46 @@ const logout = async () => {
 /* BRAND */
 .brand {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: center;
-  margin-bottom: 28px;
+  gap: 4px;
+  margin: 2px 4px 18px;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
 }
 
-.brand img {
-  width: 202px;
+.applicant-name {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.15;
+  word-break: break-word;
 }
 
-.mini-logo {
-  width: 0px;
+.applicant-email {
+  margin: 0;
+  color: rgba(229, 231, 235, 0.92);
+  font-size: 0.72rem;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.mini-user-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 16px;
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.28);
 }
 
 /* MENU */
@@ -234,12 +263,14 @@ const logout = async () => {
   gap: 14px;
   padding: 12px 16px;
   border-radius: 12px;
-  color: #e5e7eb;
+  color: #eaf4ee;
   text-decoration: none;
   font-size: 14px;
   background: none;
   border: none;
   cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+  border: 1px solid transparent;
 }
 
 /* CENTER ICON WHEN COLLAPSED */
@@ -252,23 +283,33 @@ const logout = async () => {
 /* ICON */
 .icon {
   font-size: 18px;
-  color: #d1d5db;
+  color: #dce8df;
 }
 
 /* HOVER */
 .menu-item:hover,
 .collapse:hover {
-  background: rgba(255,255,255,0.12);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.14), rgba(255,255,255,0.06));
+  border-color: rgba(134, 239, 172, 0.24);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.menu-item:hover .icon,
+.collapse:hover .icon {
+  color: #f0fdf4;
 }
 
 /* ACTIVE */
 .router-link-active {
-  background: rgba(255,255,255,0.22);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.20), rgba(255,255,255,0.08));
   font-weight: 600;
+  border: 1px solid rgba(187, 247, 208, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
 }
 
 .router-link-active .icon {
-  color: #facc15;
+  color: #f4c41f;
 }
 
 /* FOOTER */
@@ -281,18 +322,27 @@ const logout = async () => {
 
 /* LOGOUT */
 .logout {
-  color: #fecaca;
+  color: #fee2e2;
 }
 
 .logout:hover {
-  background: rgba(239,68,68,0.2);
+  background: linear-gradient(135deg, rgba(239,68,68,0.20), rgba(255,255,255,0.05));
+  border-color: rgba(254, 202, 202, 0.24);
+  color: #fff7f7;
+  transform: translateY(-1px);
+}
+
+.logout:hover .icon {
+  color: #ffe4e6;
 }
 
 .logout-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(2px);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(34, 197, 94, 0.14), transparent 34%),
+    rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(6px);
   z-index: 2000;
   display: grid;
   place-items: center;
@@ -300,18 +350,20 @@ const logout = async () => {
 }
 
 .logout-modal {
-  width: min(360px, 100%);
-  background: #ffffff;
+  width: min(420px, 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfefc 100%);
   color: #0f172a;
-  border-radius: 14px;
-  border: 1px solid #dbe4ee;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.22);
-  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid #d9e8dc;
+  box-shadow: 0 26px 58px rgba(15, 23, 42, 0.22);
+  padding: 0;
+  overflow: hidden;
 }
 
 .logout-modal h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
+  color: #0f172a;
 }
 
 .logout-modal p {
@@ -321,31 +373,63 @@ const logout = async () => {
   font-size: 0.9rem;
 }
 
+.logout-modal > h3,
+.logout-modal > p,
 .logout-modal-actions {
-  margin-top: 14px;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.logout-modal > h3 {
+  padding-top: 16px;
+}
+
+.logout-modal > p {
+  margin-top: 6px;
+}
+
+.logout-modal-actions {
+  margin-top: 16px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  padding-bottom: 16px;
+  border-top: 1px solid #eef4ef;
+  padding-top: 14px;
+  background: rgba(248, 250, 252, 0.7);
 }
 
 .logout-modal-btn {
-  min-height: 38px;
-  padding: 8px 12px;
-  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 12px;
   border: 1px solid transparent;
   font-weight: 700;
   cursor: pointer;
+  transition: all .18s ease;
 }
 
 .logout-modal-btn.cancel {
   background: #ffffff;
-  border-color: #dbe4ee;
+  border-color: #dce7de;
   color: #334155;
 }
 
+.logout-modal-btn.cancel:hover:not(:disabled) {
+  background: #f5faf6;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
 .logout-modal-btn.confirm {
-  background: #b91c1c;
+  background: linear-gradient(135deg, #b91c1c, #dc2626);
   color: #ffffff;
+  box-shadow: 0 8px 16px rgba(220, 38, 38, 0.18);
+}
+
+.logout-modal-btn.confirm:hover:not(:disabled) {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
 }
 
 .logout-modal-btn:disabled {
