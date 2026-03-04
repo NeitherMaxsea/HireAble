@@ -106,12 +106,29 @@
 
         <div v-else-if="!jobsLoading" class="results-grid">
           <article v-for="job in filteredJobs" :key="job.id" class="result-card">
+            <div class="result-media">
+              <iframe
+                v-if="job.location"
+                :src="getMapUrl(job)"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                class="result-media-map"
+              ></iframe>
+              <div v-else class="result-media-placeholder">No location</div>
+              <span class="result-type result-type-overlay">{{ job.type || "Open" }}</span>
+            </div>
+
             <div class="result-top">
               <h3>{{ job.title || "Untitled Role" }}</h3>
-              <span class="result-type">{{ job.type || "Open" }}</span>
             </div>
             <p class="company">{{ job.companyName || "Company" }}</p>
-            <p class="meta">{{ job.location || "Location not specified" }}</p>
+            <div class="result-meta-chips">
+              <span class="result-chip">{{ job.location || "Location not specified" }}</span>
+              <span class="result-chip">{{ job.category || "General" }}</span>
+              <span class="result-chip">{{ job.salary || "Negotiable" }}</span>
+              <span class="result-chip">{{ job.vacancies || job.slots || 1 }} Vacancy{{ (job.vacancies || job.slots || 1) > 1 ? "ies" : "" }}</span>
+              <span v-if="job.disabilityType" class="result-chip result-chip-accent">{{ job.disabilityType }}</span>
+            </div>
             <p class="desc">{{ job.description || "No description provided." }}</p>
             <div class="result-actions">
               <button type="button" class="action-btn view-btn" @click="openJobDetails(job)">
@@ -147,12 +164,80 @@
               &times;
             </button>
           </div>
-          <div class="detail-body">
-            <p><strong>Location:</strong> {{ selectedJob.location || "Location not specified" }}</p>
-            <p><strong>Category:</strong> {{ selectedJob.category || "Not specified" }}</p>
-            <p><strong>Type:</strong> {{ selectedJob.type || "Open" }}</p>
-            <p><strong>Description:</strong></p>
-            <p>{{ selectedJob.description || "No description provided." }}</p>
+          <div class="detail-body detail-body-pro">
+            <div class="detail-hero-card">
+              <div class="detail-chip-row">
+                <span class="detail-chip"><strong>Location:</strong> {{ selectedJob.location || "Not specified" }}</span>
+                <span class="detail-chip"><strong>Type:</strong> {{ selectedJob.type || "Open" }}</span>
+                <span class="detail-chip"><strong>Category:</strong> {{ selectedJob.category || "Not specified" }}</span>
+                <span class="detail-chip"><strong>Salary:</strong> {{ selectedJob.salary || "Negotiable" }}</span>
+                <span class="detail-chip"><strong>Vacancies:</strong> {{ selectedJob.vacancies || selectedJob.slots || 1 }}</span>
+                <span class="detail-chip"><strong>Disability:</strong> {{ selectedJob.disabilityType || "PWD-friendly" }}</span>
+              </div>
+            </div>
+
+            <div v-if="selectedJob.imageGallery?.length" class="detail-section">
+              <h3>Job Photos</h3>
+              <div class="detail-photo-grid">
+                <figure
+                  v-for="(photo, idx) in selectedJob.imageGallery"
+                  :key="`${selectedJob.id || 'job'}-photo-${idx}`"
+                  class="detail-photo-card"
+                >
+                  <img :src="photo" :alt="`Job photo ${idx + 1}`" />
+                  <figcaption>Photo {{ idx + 1 }}</figcaption>
+                </figure>
+              </div>
+            </div>
+
+            <div class="detail-layout">
+              <div class="detail-main">
+                <div class="detail-section">
+                  <h3>Description</h3>
+                  <p>{{ selectedJob.description || "No description provided." }}</p>
+                </div>
+
+                <div class="detail-section">
+                  <h3>Qualifications</h3>
+                  <ul v-if="formatDetailList(selectedJob.qualifications).length" class="detail-list">
+                    <li v-for="(item, idx) in formatDetailList(selectedJob.qualifications)" :key="`qual-${idx}`">
+                      {{ item }}
+                    </li>
+                  </ul>
+                  <p v-else>No qualifications provided.</p>
+                </div>
+
+                <div class="detail-section">
+                  <h3>Workplace Accommodations</h3>
+                  <ul v-if="formatDetailList(selectedJob.accommodations).length" class="detail-list">
+                    <li v-for="(item, idx) in formatDetailList(selectedJob.accommodations)" :key="`acc-${idx}`">
+                      {{ item }}
+                    </li>
+                  </ul>
+                  <p v-else>No accommodation details provided.</p>
+                </div>
+              </div>
+
+              <aside class="detail-side">
+                <div class="detail-section detail-section-compact">
+                  <h3>Posting Details</h3>
+                  <div class="detail-kv">
+                    <div class="detail-kv-item">
+                      <span>Exact Address</span>
+                      <strong>{{ selectedJob.exactAddress || "Not specified" }}</strong>
+                    </div>
+                    <div class="detail-kv-item">
+                      <span>Company</span>
+                      <strong>{{ selectedJob.companyName || "Company" }}</strong>
+                    </div>
+                    <div class="detail-kv-item">
+                      <span>Status</span>
+                      <strong>{{ selectedJob.status || "open" }}</strong>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
           <div class="detail-actions">
             <button type="button" class="action-btn view-btn" @click="closeJobDetails">Close</button>
@@ -279,16 +364,18 @@ export default {
     document.removeEventListener("click", this.closeDropdown);
   },
   methods: {
-    showToast(text, background = "#0f172a") {
+    showToast(text, background = "#0f172a", duration = 2600, noTimer = false) {
       Toastify({
         text,
-        duration: 2600,
+        duration,
         gravity: "top",
         position: "right",
         stopOnFocus: true,
         close: true,
+        className: noTimer ? "toast-no-timer" : "",
         style: {
           background,
+          "--toast-duration": `${duration}ms`,
         },
       }).showToast();
     },
@@ -319,6 +406,24 @@ export default {
     closeJobDetails() {
       this.selectedJob = null;
     },
+    getMapUrl(job) {
+      const location = String(job?.location || "").trim();
+      if (!location) return "";
+      const exactAddress = String(job?.exactAddress || "").trim();
+      const query = [exactAddress, location, "Dasmarinas, Cavite"].filter(Boolean).join(", ");
+      return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+    },
+    formatDetailList(value) {
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item || "").trim()).filter(Boolean);
+      }
+      const text = String(value || "").trim();
+      if (!text) return [];
+      return text
+        .split(/\r?\n|•|;/g)
+        .map((item) => item.replace(/^\s*-\s*/, "").trim())
+        .filter(Boolean);
+    },
     async applyToJob(job) {
       const targetJob = job || this.selectedJob;
       const jobId = String(targetJob?.id || "").trim();
@@ -344,10 +449,15 @@ export default {
         ""
       ).trim();
       const userRole = String(localStorage.getItem("userRole") || "").trim().toLowerCase();
-      const profileCompleted = String(localStorage.getItem("userProfileCompleted") || "").trim().toLowerCase() === "true";
 
       if (!applicantId && !applicantEmail) {
-        this.showToast("Please register as applicant before applying. Redirecting...", "#f59e0b");
+        const redirectDelay = 2200;
+        this.showToast(
+          "Please register as applicant before applying. Redirecting...",
+          "#f59e0b",
+          redirectDelay,
+          true
+        );
         window.setTimeout(() => {
           this.$router.push({
             path: "/register",
@@ -356,15 +466,7 @@ export default {
               redirect: this.$route.fullPath || "/search-jobs",
             },
           });
-        }, 700);
-        return;
-      }
-
-      if (userRole === "applicant" && !profileCompleted) {
-        this.showToast("Please complete your account information first. Redirecting to onboarding...", "#f59e0b");
-        window.setTimeout(() => {
-          this.$router.push("/applicant/onboarding");
-        }, 700);
+        }, redirectDelay);
         return;
       }
 
@@ -412,9 +514,29 @@ export default {
                   raw.companyName || raw.company_name || raw.company || raw.department || ""
                 ).trim(),
                 location: String(raw.location || raw.address || "").trim(),
+                exactAddress: String(raw.exactAddress || raw.exact_address || "").trim(),
                 type: String(raw.type || raw.employmentType || raw.jobType || "").trim(),
                 category: String(raw.category || raw.industry || raw.department || "").trim(),
                 description: String(raw.description || "").trim(),
+                salary: String(raw.salary || "").trim(),
+                vacancies: Number(raw.vacancies || raw.slots || 0) || 0,
+                slots: Number(raw.slots || raw.vacancies || 0) || 0,
+                disabilityType: String(raw.disabilityType || raw.disability_type || raw.disability || "").trim(),
+                qualifications: raw.qualifications || "",
+                accommodations: raw.accommodations || raw.workplaceAccommodations || "",
+                imageGallery: Array.from(
+                  new Set(
+                    [
+                      ...(Array.isArray(raw.images) ? raw.images : []),
+                      raw.imageUrl,
+                      raw.image_url,
+                      raw.imageUrl2,
+                      raw.image_url2,
+                    ]
+                      .map((value) => String(value || "").trim())
+                      .filter(Boolean)
+                  )
+                ),
                 status: String(raw.status || "open").toLowerCase(),
               };
             })
@@ -851,10 +973,39 @@ export default {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
+  overflow: hidden;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.result-media {
+  position: relative;
+  width: 100%;
+  height: 158px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.result-media-map {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}
+
+.result-media-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .result-top {
@@ -879,6 +1030,15 @@ export default {
   color: #1e3a8a;
 }
 
+.result-type-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #dbe2ea;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
 .company {
   margin: 0;
   font-weight: 600;
@@ -890,10 +1050,38 @@ export default {
   font-size: 0.9rem;
 }
 
+.result-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.result-chip {
+  border: 1px solid #dbe2ea;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.result-chip-accent {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
 .desc {
   margin: 0;
   color: #64748b;
   line-height: 1.5;
+  font-size: 0.84rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .result-actions {
@@ -1001,6 +1189,153 @@ export default {
   margin: 0 0 10px;
   color: #334155;
   line-height: 1.55;
+}
+
+.detail-body-pro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-hero-card {
+  border: 1px solid #dbe7df;
+  background: linear-gradient(180deg, #f7fcf8 0%, #eef8f1 100%);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.detail-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #dbe2ea;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.detail-chip strong {
+  color: #0f172a;
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.85fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.detail-main,
+.detail-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-section {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.detail-section h3 {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: #0f172a;
+}
+
+.detail-section p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.detail-section-compact h3 {
+  margin-bottom: 10px;
+}
+
+.detail-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-kv-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.detail-kv-item span {
+  color: #64748b;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+
+.detail-kv-item strong {
+  color: #0f172a;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.detail-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-list li {
+  color: #334155;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.detail-photo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.detail-photo-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-photo-card img {
+  width: 100%;
+  height: 190px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #dbe2ea;
+  background: #f8fafc;
+}
+
+.detail-photo-card figcaption {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 .detail-actions {
@@ -1134,6 +1469,10 @@ export default {
     grid-template-columns: minmax(0, 1fr) minmax(140px, 180px);
     gap: 24px;
   }
+
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1142,6 +1481,15 @@ export default {
   }
 
   .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-modal {
+    width: min(96vw, 700px);
+    padding: 14px;
+  }
+
+  .detail-photo-grid {
     grid-template-columns: 1fr;
   }
 

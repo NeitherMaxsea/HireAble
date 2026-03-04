@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PWD Hireable Proximity — Dasmariñas Disability-Based Jobs</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --brand:#16a34a;
+      --brand2:#22c55e;
+      --line:rgba(15,23,42,.08);
+      --shadow: 0 18px 45px rgba(2,6,23,.10);
+      --shadow2: 0 10px 26px rgba(2,6,23,.10);
+      --radius: 18px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family:"Poppins", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(900px 550px at 10% 0%, rgba(34,197,94,.18), transparent 60%),
+        radial-gradient(900px 600px at 90% 10%, rgba(22,163,74,.16), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      overflow-x:hidden;
+    }
+    .container{ width:min(1200px, 92%); margin:0 auto; }
+
+    /* NAV */
+    .nav{
+      position:sticky; top:0; z-index:50;
+      backdrop-filter: blur(14px);
+      background: rgba(246,248,251,.75);
+      border-bottom:1px solid var(--line);
+    }
+    .nav-inner{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 0;
+    }
+    .brand{ display:flex; gap:10px; align-items:center; text-decoration:none; color:inherit; }
+    .logo{
+      width:40px; height:40px; border-radius:12px;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 12px 26px rgba(22,163,74,.22);
+      position:relative; overflow:hidden;
+    }
+    .logo::after{
+      content:""; position:absolute; inset:-30%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.55), transparent 55%);
+      transform: rotate(18deg);
+    }
+    .brand-title{ font-weight:700; font-size:15px; line-height:1.1; }
+    .brand-sub{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .nav-links{ display:flex; gap:18px; align-items:center; }
+    .nav-links a{
+      text-decoration:none; color:var(--muted);
+      font-weight:600; font-size:13px;
+      padding:10px 12px; border-radius:12px; transition:.2s ease;
+    }
+    .nav-links a:hover{ color:var(--text); background: rgba(2,6,23,.04); }
+
+    .btn{
+      border:0; cursor:pointer;
+      padding:12px 14px; border-radius:14px;
+      font-weight:700; font-size:13px;
+      transition: .2s ease;
+      display:inline-flex; align-items:center; gap:10px;
+      user-select:none; white-space:nowrap;
+    }
+    .btn-primary{
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      color:white;
+      box-shadow: 0 14px 32px rgba(22,163,74,.22);
+    }
+    .btn-primary:hover{ transform: translateY(-1px); filter: brightness(1.02); }
+    .btn-ghost{
+      background: rgba(2,6,23,.04);
+      color: var(--text);
+    }
+    .btn-ghost:hover{ background: rgba(2,6,23,.06); transform: translateY(-1px); }
+
+    /* HERO */
+    .hero{ padding:44px 0 22px; }
+    .hero-grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:26px;
+      align-items:stretch;
+    }
+    .hero-card{
+      background: rgba(255,255,255,.72);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:28px;
+      position:relative;
+      overflow:hidden;
+    }
+    .hero-card::before{
+      content:"";
+      position:absolute; inset:-60px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(34,197,94,.18), transparent 45%),
+        radial-gradient(circle at 80% 30%, rgba(22,163,74,.14), transparent 45%);
+      pointer-events:none;
+    }
+    .hero-badge{
+      display:inline-flex; align-items:center; gap:10px;
+      padding:9px 12px;
+      border-radius:999px;
+      background: rgba(22,163,74,.10);
+      border: 1px solid rgba(22,163,74,.18);
+      color: #166534;
+      font-weight:700;
+      font-size:12px;
+      position:relative; z-index:1;
+    }
+    .hero-title{
+      margin:14px 0 10px;
+      font-size: clamp(28px, 3.2vw, 44px);
+      line-height:1.05;
+      font-weight:800;
+      position:relative; z-index:1;
+    }
+    .hero-title span{
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      -webkit-background-clip:text;
+      background-clip:text;
+      color:transparent;
+    }
+    .hero-desc{
+      margin:0;
+      color: var(--muted);
+      font-size:14px;
+      line-height:1.7;
+      position:relative; z-index:1;
+      max-width: 60ch;
+    }
+    .hero-actions{
+      display:flex; gap:12px; margin-top:18px; flex-wrap:wrap;
+      position:relative; z-index:1;
+    }
+    .mini-stats{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:12px;
+      margin-top:18px;
+      position:relative; z-index:1;
+    }
+    .stat{
+      padding:14px;
+      background: rgba(255,255,255,.7);
+      border:1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 10px 22px rgba(2,6,23,.06);
+    }
+    .stat strong{ display:block; font-size:16px; }
+    .stat span{ color:var(--muted); font-size:12px; font-weight:600; }
+
+    /* SEARCH CARD */
+    .search-card{
+      background: rgba(255,255,255,.72);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow2);
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      position:relative;
+      overflow:hidden;
+    }
+    .search-card::before{
+      content:"";
+      position:absolute; inset:-40px;
+      background: radial-gradient(circle at 20% 20%, rgba(2,6,23,.05), transparent 55%);
+      pointer-events:none;
+    }
+    .field{ display:flex; flex-direction:column; gap:8px; position:relative; z-index:1; }
+    .label{ font-size:12px; font-weight:700; color: rgba(15,23,42,.85); }
+    .input, .select{
+      width:100%;
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.85);
+      outline:none;
+      font-size:13px;
+      font-weight:600;
+      color: var(--text);
+      transition: .15s ease;
+    }
+    .input:focus, .select:focus{
+      border-color: rgba(22,163,74,.45);
+      box-shadow: 0 0 0 4px rgba(34,197,94,.12);
+    }
+    .pill-row{ display:flex; flex-wrap:wrap; gap:8px; position:relative; z-index:1; }
+    .pill{
+      border:1px solid var(--line);
+      background: rgba(2,6,23,.03);
+      color: var(--text);
+      padding:8px 10px;
+      border-radius: 999px;
+      font-size:12px;
+      font-weight:700;
+      cursor:pointer;
+      transition:.15s ease;
+      user-select:none;
+    }
+    .pill.active{
+      background: rgba(22,163,74,.12);
+      border-color: rgba(22,163,74,.25);
+      color:#166534;
+    }
+
+    section{ padding: 22px 0 44px; }
+    .section-head{
+      display:flex; align-items:flex-end; justify-content:space-between;
+      gap:16px; margin-bottom: 14px;
+    }
+    .section-head h2{ margin:0; font-size:18px; font-weight:800; }
+    .section-head p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      font-weight:600;
+      max-width: 70ch;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:14px;
+    }
+    .job{
+      background: rgba(255,255,255,.82);
+      border:1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 14px 28px rgba(2,6,23,.06);
+      padding:16px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      transition:.18s ease;
+      position:relative;
+      overflow:hidden;
+    }
+    .job:hover{ transform: translateY(-2px); box-shadow: 0 18px 36px rgba(2,6,23,.09); }
+    .job-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .job h3{ margin:0; font-size:14px; font-weight:800; line-height:1.2; }
+    .company{ margin-top:3px; color: var(--muted); font-size:12px; font-weight:700; }
+    .tag{
+      font-size:11px; font-weight:800;
+      padding:8px 10px; border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(2,6,23,.03);
+      color: rgba(15,23,42,.85);
+      white-space:nowrap;
+    }
+    .meta{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+    .chip{
+      font-size:11px; font-weight:800;
+      padding:7px 9px; border-radius:999px;
+      background: rgba(22,163,74,.10);
+      border: 1px solid rgba(22,163,74,.18);
+      color:#166534;
+    }
+    .job p{
+      margin:0;
+      color: var(--muted);
+      font-size:12px;
+      line-height:1.6;
+      font-weight:600;
+    }
+    .job-actions{ margin-top:auto; display:flex; gap:10px; flex-wrap:wrap; }
+    .btn-small{ padding:10px 12px; border-radius:14px; font-size:12px; font-weight:800; }
+
+    .how{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:14px;
+      margin-top:14px;
+    }
+    .step{
+      background: rgba(255,255,255,.75);
+      border:1px solid var(--line);
+      border-radius: 18px;
+      padding:16px;
+      box-shadow: 0 14px 28px rgba(2,6,23,.06);
+    }
+    .step strong{
+      display:flex; align-items:center; gap:10px;
+      font-size:13px; font-weight:900; margin-bottom:6px;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:999px;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 10px 20px rgba(22,163,74,.22);
+    }
+    .step p{ margin:0; color:var(--muted); font-size:12px; line-height:1.7; font-weight:600; }
+
+    footer{
+      border-top:1px solid var(--line);
+      background: rgba(255,255,255,.6);
+      padding:20px 0;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:600;
+    }
+
+    /* MODAL */
+    .modal{
+      position:fixed; inset:0;
+      background: rgba(2,6,23,.55);
+      display:none;
+      align-items:center; justify-content:center;
+      z-index:1000; padding:18px;
+    }
+    .modal.open{ display:flex; }
+    .modal-card{
+      width:min(980px, 100%);
+      background: rgba(255,255,255,.92);
+      border:1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .modal-head{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:14px 14px; border-bottom:1px solid var(--line);
+    }
+    .modal-head strong{ font-size:13px; font-weight:900; }
+    .close{
+      border:0; background: rgba(2,6,23,.06);
+      padding:10px 12px; border-radius:14px;
+      cursor:pointer; font-weight:900;
+    }
+    .modal-body{ height:min(70vh, 520px); }
+    .modal-body iframe{ width:100%; height:100%; border:0; }
+
+    /* Responsive */
+    @media (max-width: 980px){
+      .hero-grid{ grid-template-columns: 1fr; }
+      .grid{ grid-template-columns: repeat(2, 1fr); }
+      .how{ grid-template-columns: 1fr; }
+      .mini-stats{ grid-template-columns: repeat(3, 1fr); }
+      .nav-links{ display:none; }
+    }
+    @media (max-width: 640px){
+      .grid{ grid-template-columns: 1fr; }
+      .mini-stats{ grid-template-columns: 1fr; }
+    }
+
+    /* Anim */
+    .fadeUp{ opacity:0; transform: translateY(10px); animation: fadeUp .6s ease forwards; }
+    .fadeUp.d2{ animation-delay:.08s; }
+    .fadeUp.d3{ animation-delay:.16s; }
+    .fadeUp.d4{ animation-delay:.24s; }
+    @keyframes fadeUp{ to{ opacity:1; transform: translateY(0); } }
+  </style>
+</head>
+
+<body>
+  <!-- NAV -->
+  <div class="nav">
+    <div class="container">
+      <div class="nav-inner">
+        <a class="brand" href="#top">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <div class="brand-title">PWD Hireable Proximity</div>
+            <div class="brand-sub">Disability-based Job Finder • Dasmariñas</div>
+          </div>
+        </a>
+
+        <div class="nav-links">
+          <a href="#jobs">Jobs</a>
+          <a href="#how">How it works</a>
+          <a href="#disabilities">Disabilities</a>
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn btn-ghost" onclick="scrollToJobs()">Explore</button>
+          <button class="btn btn-primary" onclick="openSignup()">Create Account</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <header class="hero" id="top">
+    <div class="container">
+      <div class="hero-grid">
+        <div class="hero-card fadeUp">
+          <div class="hero-badge">🧩 Filter by disability type • PWD-friendly listings</div>
+          <h1 class="hero-title">
+            Find <span>PWD-friendly jobs</span> based on disability needs — across Dasmariñas.
+          </h1>
+          <p class="hero-desc">
+            Explore job listings tagged for disability support (e.g., hearing-friendly, wheelchair-friendly).
+            Each job still shows which barangay it is located in, so users can decide if it’s reachable.
+          </p>
+
+          <div class="hero-actions">
+            <button class="btn btn-primary" onclick="scrollToJobs()">Browse Jobs</button>
+            <button class="btn btn-ghost" onclick="openMap('Dasmariñas City, Cavite')">View Dasmariñas Map</button>
+          </div>
+
+          <div class="mini-stats">
+            <div class="stat">
+              <strong id="statJobs">0</strong>
+              <span>Active listings</span>
+            </div>
+            <div class="stat">
+              <strong id="statDisabilities">0</strong>
+              <span>Disability tags</span>
+            </div>
+            <div class="stat">
+              <strong id="statCompanies">0</strong>
+              <span>Hiring partners</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SEARCH / FILTER -->
+        <aside class="search-card fadeUp d2" aria-label="Search and filters">
+          <div class="field">
+            <div class="label">Search (job title, company, keywords)</div>
+            <input id="q" class="input" placeholder="e.g., cashier, helper, packer, encoder..." />
+          </div>
+
+          <!-- CHANGED: Barangay -> Disability -->
+          <div class="field">
+            <div class="label">Disability Type</div>
+            <select id="disability" class="select"></select>
+          </div>
+
+          <div class="field">
+            <div class="label">Work Type</div>
+            <select id="type" class="select">
+              <option value="all">All types</option>
+              <option value="On-site">On-site</option>
+              <option value="Hybrid">Hybrid</option>
+              <option value="Remote">Remote</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <div class="label">Support Tags</div>
+            <div class="pill-row" id="tags"></div>
+          </div>
+
+          <div style="display:flex; gap:10px; position:relative; z-index:1;">
+            <button class="btn btn-primary" style="flex:1;" onclick="applyFilters()">Apply filters</button>
+            <button class="btn btn-ghost" onclick="resetFilters()">Reset</button>
+          </div>
+
+          <div style="position:relative; z-index:1; color:var(--muted); font-size:12px; font-weight:600; line-height:1.6;">
+            Tip: Replace sample disability types + tags with your real categories.
+          </div>
+        </aside>
+      </div>
+    </div>
+  </header>
+
+  <!-- JOBS -->
+  <section id="jobs">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <h2 class="fadeUp d2">Available Work Opportunities</h2>
+          <p class="fadeUp d3">Filtered by disability type and support tags. Each listing shows its barangay location.</p>
+        </div>
+        <div class="fadeUp d4" style="font-size:12px; font-weight:800; color:var(--muted);">
+          Results: <span id="resultCount">0</span>
+        </div>
+      </div>
+
+      <div class="grid" id="jobGrid"></div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <h2 class="fadeUp">How it works</h2>
+          <p class="fadeUp d2">Applicants can filter jobs based on disability-related needs and required workplace supports.</p>
+        </div>
+      </div>
+
+      <div class="how">
+        <div class="step fadeUp">
+          <strong><span class="dot"></span>Select disability type</strong>
+          <p>Choose a disability category (e.g., hearing, mobility, visual) to show relevant job supports.</p>
+        </div>
+        <div class="step fadeUp d2">
+          <strong><span class="dot"></span>Check workplace supports</strong>
+          <p>Use support tags like wheelchair access, flexible schedule, training provided, and more.</p>
+        </div>
+        <div class="step fadeUp d3">
+          <strong><span class="dot"></span>Apply and track</strong>
+          <p>Apply online and track status updates in your applicant dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DISABILITIES -->
+  <section id="disabilities">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <h2 class="fadeUp">Disabilities included (sample)</h2>
+          <p class="fadeUp d2">This section lists disability categories used for filtering. Replace these with your official categories.</p>
+        </div>
+        <button class="btn btn-ghost fadeUp d3" onclick="scrollToJobs()">Browse using these filters</button>
+      </div>
+
+      <div class="pill-row" id="disabilityPills"></div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container" style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+      <div>© <span id="year"></span> PWD Hireable Proximity • Demo Landing Page</div>
+      <div>NCST Students — Web-based job employment assistance platform for PWDs in Dasmariñas (with DSS).</div>
+    </div>
+  </footer>
+
+  <!-- MAP MODAL -->
+  <div class="modal" id="modal">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Map modal">
+      <div class="modal-head">
+        <strong id="modalTitle">Map</strong>
+        <button class="close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <iframe id="mapFrame" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------- SAMPLE DATA (EDIT THIS) ----------------
+    // Each job has: disabilityTypes (for the dropdown filter) and supportTags (for pill tags)
+    const jobs = [
+      {
+        id: 1,
+        title: "Store Helper (PWD-friendly)",
+        company: "GreenMart Convenience",
+        barangay: "Paliparan I",
+        type: "On-site",
+        disabilityTypes: ["Mobility", "Hearing"],
+        supportTags: ["Flexible schedule", "No degree required"],
+        desc: "Assist with stocking, simple cleaning, and customer support. Training provided.",
+        mapQuery: "Paliparan I, Dasmariñas City, Cavite"
+      },
+      {
+        id: 2,
+        title: "Food Prep Assistant",
+        company: "Dasma Food Hub",
+        barangay: "Salitran II",
+        type: "On-site",
+        disabilityTypes: ["Hearing", "Psychosocial"],
+        supportTags: ["Training provided", "Hearing-friendly"],
+        desc: "Basic food prep, packing, and labeling. Clean environment and guided tasks.",
+        mapQuery: "Salitran II, Dasmariñas City, Cavite"
+      },
+      {
+        id: 3,
+        title: "Data Encoder (Part-time)",
+        company: "Cavite Micro Services",
+        barangay: "San Jose",
+        type: "Hybrid",
+        disabilityTypes: ["Mobility", "Visual (Low Vision)"],
+        supportTags: ["Remote option", "Flexible schedule"],
+        desc: "Encode records and verify entries. Laptop access required. Part-time available.",
+        mapQuery: "San Jose, Dasmariñas City, Cavite"
+      },
+      {
+        id: 4,
+        title: "Laundry Attendant",
+        company: "BubbleWash Laundry",
+        barangay: "Burol I",
+        type: "On-site",
+        disabilityTypes: ["Mobility", "Psychosocial"],
+        supportTags: ["No degree required", "Training provided"],
+        desc: "Sort clothes, assist folding, basic machine monitoring. Friendly team.",
+        mapQuery: "Burol I, Dasmariñas City, Cavite"
+      },
+      {
+        id: 5,
+        title: "Chat Support (Entry-level)",
+        company: "SupportLine PH",
+        barangay: "Langkaan I",
+        type: "Remote",
+        disabilityTypes: ["Hearing", "Mobility"],
+        supportTags: ["Remote option", "Hearing-friendly", "Flexible schedule"],
+        desc: "Answer customer chats with prepared scripts. Internet connection required.",
+        mapQuery: "Langkaan I, Dasmariñas City, Cavite"
+      },
+      {
+        id: 6,
+        title: "Packaging Staff",
+        company: "Local Goods Trading",
+        barangay: "Sampaloc IV",
+        type: "On-site",
+        disabilityTypes: ["Mobility"],
+        supportTags: ["Wheelchair-friendly", "Training provided"],
+        desc: "Packing items and labeling. Workstation is accessible and organized.",
+        mapQuery: "Sampaloc IV, Dasmariñas City, Cavite"
+      }
+    ];
+
+    // Disability categories (for dropdown + pills)
+    const disabilities = [
+      "Mobility",
+      "Hearing",
+      "Visual (Low Vision)",
+      "Speech",
+      "Psychosocial",
+      "Intellectual"
+    ];
+
+    // Support tags (pills)
+    const supportTags = [
+      "Flexible schedule",
+      "No degree required",
+      "Training provided",
+      "Wheelchair-friendly",
+      "Hearing-friendly",
+      "Remote option"
+    ];
+
+    // ---------------- STATE ----------------
+    const state = {
+      q: "",
+      disability: "all",
+      type: "all",
+      activeTags: new Set()
+    };
+
+    // ---------------- INIT ----------------
+    const qEl = document.getElementById("q");
+    const disabilityEl = document.getElementById("disability");
+    const typeEl = document.getElementById("type");
+    const tagsEl = document.getElementById("tags");
+    const gridEl = document.getElementById("jobGrid");
+    const resultCountEl = document.getElementById("resultCount");
+
+    function init(){
+      document.getElementById("year").textContent = new Date().getFullYear();
+
+      // Stats
+      document.getElementById("statJobs").textContent = jobs.length;
+      document.getElementById("statDisabilities").textContent = disabilities.length;
+
+      const companies = [...new Set(jobs.map(j => j.company))];
+      document.getElementById("statCompanies").textContent = companies.length;
+
+      // Disability dropdown
+      disabilityEl.innerHTML = `
+        <option value="all">All disability types</option>
+        ${disabilities.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("")}
+      `;
+
+      // Support tags pills
+      tagsEl.innerHTML = supportTags.map(t => `
+        <div class="pill" data-tag="${escapeHtml(t)}" onclick="toggleTag('${escapeJs(t)}')">${escapeHtml(t)}</div>
+      `).join("");
+
+      // Disability pills section
+      const pills = document.getElementById("disabilityPills");
+      pills.innerHTML = disabilities.map(d => `
+        <div class="pill" onclick="quickDisability('${escapeJs(d)}')">${escapeHtml(d)}</div>
+      `).join("");
+
+      // Events
+      qEl.addEventListener("input", () => { state.q = qEl.value.trim(); render(); });
+      disabilityEl.addEventListener("change", () => { state.disability = disabilityEl.value; render(); });
+      typeEl.addEventListener("change", () => { state.type = typeEl.value; render(); });
+
+      render();
+    }
+
+    // ---------------- FILTERS ----------------
+    function applyFilters(){
+      state.q = qEl.value.trim();
+      state.disability = disabilityEl.value;
+      state.type = typeEl.value;
+      render();
+      scrollToJobs();
+    }
+
+    function resetFilters(){
+      state.q = "";
+      state.disability = "all";
+      state.type = "all";
+      state.activeTags.clear();
+
+      qEl.value = "";
+      disabilityEl.value = "all";
+      typeEl.value = "all";
+
+      [...tagsEl.querySelectorAll(".pill")].forEach(p => p.classList.remove("active"));
+      render();
+    }
+
+    function toggleTag(tag){
+      if(state.activeTags.has(tag)) state.activeTags.delete(tag);
+      else state.activeTags.add(tag);
+
+      [...tagsEl.querySelectorAll(".pill")].forEach(p => {
+        if(p.dataset.tag === tag) p.classList.toggle("active");
+      });
+
+      render();
+    }
+
+    function quickDisability(d){
+      disabilityEl.value = d;
+      state.disability = d;
+      render();
+      scrollToJobs();
+    }
+
+    function matches(job){
+      const q = state.q.toLowerCase();
+
+      const qMatch = !q ||
+        job.title.toLowerCase().includes(q) ||
+        job.company.toLowerCase().includes(q) ||
+        job.desc.toLowerCase().includes(q) ||
+        job.barangay.toLowerCase().includes(q);
+
+      const disabilityMatch =
+        state.disability === "all" || (job.disabilityTypes || []).includes(state.disability);
+
+      const typeMatch = state.type === "all" || job.type === state.type;
+
+      const tagsMatch = state.activeTags.size === 0 ||
+        [...state.activeTags].every(t => (job.supportTags || []).includes(t) || (t === "Remote option" && job.type === "Remote"));
+
+      return qMatch && disabilityMatch && typeMatch && tagsMatch;
+    }
+
+    // ---------------- RENDER ----------------
+    function render(){
+      const filtered = jobs.filter(matches);
+      resultCountEl.textContent = filtered.length;
+
+      if(filtered.length === 0){
+        gridEl.innerHTML = `
+          <div style="grid-column:1/-1; background:rgba(255,255,255,.75); border:1px solid var(--line);
+                      border-radius:18px; padding:18px; box-shadow:0 14px 28px rgba(2,6,23,.06);">
+            <div style="font-weight:900; margin-bottom:6px;">No results found</div>
+            <div style="color:var(--muted); font-size:12px; font-weight:600; line-height:1.7;">
+              Try changing disability type, work type, or remove some support tags.
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      gridEl.innerHTML = filtered.map(job => jobCard(job)).join("");
+    }
+
+    function jobCard(job){
+      const dis = (job.disabilityTypes || []).slice(0,2).map(d => `<div class="chip">🧩 ${escapeHtml(d)}</div>`).join("");
+      const sup = (job.supportTags || []).slice(0,1).map(t => `<div class="chip">${escapeHtml(t)}</div>`).join("");
+
+      return `
+        <article class="job">
+          <div class="job-top">
+            <div>
+              <h3>${escapeHtml(job.title)}</h3>
+              <div class="company">${escapeHtml(job.company)}</div>
+            </div>
+            <div class="tag">${escapeHtml(job.type)}</div>
+          </div>
+
+          <div class="meta">
+            <div class="chip">📍 ${escapeHtml(job.barangay)}</div>
+            ${dis}
+            ${sup}
+          </div>
+
+          <p>${escapeHtml(job.desc)}</p>
+
+          <div class="job-actions">
+            <button class="btn btn-primary btn-small" onclick="applyJob(${job.id})">Apply</button>
+            <button class="btn btn-ghost btn-small" onclick="openMap('${escapeJs(job.mapQuery)}')">View on map</button>
+          </div>
+        </article>
+      `;
+    }
+
+    function applyJob(id){
+      const job = jobs.find(j => j.id === id);
+      alert(`Demo: Applying to "${job.title}"\nDisability tags: ${(job.disabilityTypes || []).join(", ")}\nLocation: ${job.barangay}`);
+    }
+
+    function openSignup(){ alert("Demo: Open your signup/login modal or page here."); }
+    function scrollToJobs(){ document.getElementById("jobs").scrollIntoView({ behavior:"smooth", block:"start" }); }
+
+    // ---------------- MAP MODAL ----------------
+    function openMap(query){
+      const modal = document.getElementById("modal");
+      const frame = document.getElementById("mapFrame");
+      const title = document.getElementById("modalTitle");
+
+      title.textContent = "Map: " + query;
+      const url = "https://www.openstreetmap.org/export/embed.html?search=" + encodeURIComponent(query);
+      frame.src = url;
+      modal.classList.add("open");
+    }
+    function closeModal(){
+      const modal = document.getElementById("modal");
+      const frame = document.getElementById("mapFrame");
+      modal.classList.remove("open");
+      frame.src = "";
+    }
+    document.getElementById("modal").addEventListener("click", (e) => {
+      if(e.target.id === "modal") closeModal();
+    });
+
+    // ---------------- UTIL ----------------
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"']/g, s => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[s]));
+    }
+    function escapeJs(str){
+      return String(str).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    }
+
+    init();
+  </script>
+</body>
+</html>

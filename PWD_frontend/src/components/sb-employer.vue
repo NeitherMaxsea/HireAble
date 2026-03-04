@@ -138,22 +138,49 @@
         </transition>
       </div>
 
-      <router-link
-        to="/employer/HR/interview-management"
-        class="nav-link"
-        :class="{ active: route.path.includes('/interview-management') }"
+      <div
+        class="nav-group"
         @mouseenter="tooltip='Interview Management'"
         @mouseleave="tooltip=''"
       >
-        <span class="nav-left">
-          <i class="bi bi-calendar2-check"></i>
-          <span v-if="!collapsed">Interview Management</span>
-        </span>
+        <div
+          class="nav-parent"
+          :class="{ active: route.path.includes('/interview-management') }"
+          @click="handleInterviewClick"
+        >
+          <span class="nav-left">
+            <i class="bi bi-calendar2-check"></i>
+            <span v-if="!collapsed">Interview Management</span>
+          </span>
+          <span v-if="!collapsed">{{ showInterview ? "▾" : "▸" }}</span>
+        </div>
 
         <span v-if="collapsed && tooltip==='Interview Management'" class="tooltip">
           Interview Management
         </span>
-      </router-link>
+
+        <transition name="slide">
+          <div v-show="showInterview && !collapsed" class="nav-children">
+            <router-link
+              to="/employer/HR/interview-management/scheduling"
+              class="nav-child"
+              :class="{ active: route.path.includes('/interview-management/scheduling') }"
+            >
+              <i class="bi bi-calendar-plus"></i>
+              Interview Scheduling
+            </router-link>
+
+            <router-link
+              to="/employer/HR/interview-management/schedule-status"
+              class="nav-child"
+              :class="{ active: route.path.includes('/interview-management/schedule-status') }"
+            >
+              <i class="bi bi-clipboard-check"></i>
+              Schedule Status
+            </router-link>
+          </div>
+        </transition>
+      </div>
 
       <router-link
         to="/employer/HR/add-employee"
@@ -182,7 +209,7 @@
       >
         <span class="nav-left">
           <i class="bi bi-people"></i>
-          <span v-if="!collapsed">Employer Records</span>
+          <span v-if="!collapsed">Employee Records</span>
         </span>
 
         <span v-if="collapsed && tooltip==='Employer Records'" class="tooltip">
@@ -269,6 +296,7 @@ const router = useRouter()
 const collapsed = ref(false)
 const showJobs = ref(false)
 const showApplicants = ref(false)
+const showInterview = ref(false)
 const showMenu = ref(false)
 const tooltip = ref("")
 
@@ -291,6 +319,10 @@ onMounted(() => {
   userName.value = storedName || "User"
   userEmail.value = storedEmail || "No email"
   companyName.value = storedCompanyName || "Company"
+
+  if (route.path.includes("/job-management")) showJobs.value = true
+  if (route.path.includes("/applicant-lists") || route.path.includes("/application-status-tracking")) showApplicants.value = true
+  if (route.path.includes("/interview-management")) showInterview.value = true
 
   document.addEventListener("click", handleClickOutside)
 })
@@ -318,6 +350,15 @@ function handleApplicantClick() {
     showApplicants.value = true
   } else {
     showApplicants.value = !showApplicants.value
+  }
+}
+
+function handleInterviewClick() {
+  if (collapsed.value) {
+    collapsed.value = false
+    showInterview.value = true
+  } else {
+    showInterview.value = !showInterview.value
   }
 }
 
@@ -376,8 +417,9 @@ async function logout() {
     duration: 3000,
     close: true,
     stopOnFocus: true,
+      className: 'toast-no-timer',
     style: {
-      background: "#0f172a"
+      background: "#16a34a"
     }
   }).showToast()
 }

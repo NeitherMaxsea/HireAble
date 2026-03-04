@@ -206,54 +206,79 @@
         </p>
 
         <div class="about-cta-content" aria-label="Featured inclusive job posts">
-          <div class="about-cta-panel about-cta-actions about-cta-jobs-list">
+          <div ref="featuredJobsSection" class="about-cta-panel about-cta-actions about-cta-jobs-list">
             <h4>Featured Job Posts</h4>
             <p class="about-cta-actions-copy">
-              Preview ng job posts na puwedeng makita ng applicants, kasama ang
-              disability support / fit sa company setup.
+              Preview of job posts visible to applicants, including disability
+              support and role fit for your company setup.
             </p>
             <div class="landing-job-preview-list">
+              <p v-if="featuredJobPosts.length === 0" class="about-cta-actions-copy">
+                No job posts found for the selected filters.
+              </p>
               <article
-                v-for="(job, index) in featuredJobPosts"
-                :key="`${job.title}-${job.company}-${job.postedDate}`"
+                v-for="item in pagedFeaturedJobPosts"
+                :key="item.job.id || `${item.job.title}-${item.job.company}-${item.job.postedDate}`"
                 class="landing-job-card"
-                :class="{ 'is-active': selectedFeaturedJobIndex === index }"
+                :class="{ 'is-active': selectedFeaturedJobIndex === item.index }"
                 role="button"
                 tabindex="0"
-                @click="selectFeaturedJob(index)"
-                @keydown.enter.prevent="selectFeaturedJob(index)"
-                @keydown.space.prevent="selectFeaturedJob(index)"
+                @click="selectFeaturedJob(item.index)"
+                @keydown.enter.prevent="selectFeaturedJob(item.index)"
+                @keydown.space.prevent="selectFeaturedJob(item.index)"
               >
                 <div class="landing-job-head">
                   <div class="landing-job-logo" aria-hidden="true">
-                    {{ job.companyInitials }}
+                    {{ item.job.companyInitials }}
                   </div>
                   <div class="landing-job-title-wrap">
-                    <h5>{{ job.title }}</h5>
-                    <p>{{ job.company }}</p>
+                    <h5>{{ item.job.title }}</h5>
+                    <p>{{ item.job.company }}</p>
                   </div>
                 </div>
 
                 <p class="landing-job-desc">
-                  {{ job.description }}
+                  {{ item.job.description }}
                 </p>
 
                 <div class="landing-job-meta">
-                  <span class="landing-job-chip">{{ job.location }}</span>
-                  <span class="landing-job-chip">{{ job.setup }}</span>
-                  <span class="landing-job-chip">{{ job.vacancies }} Vacancies</span>
-                  <span class="landing-job-chip">{{ job.salary }}</span>
-                  <span class="landing-job-chip landing-job-chip-accent">{{ job.disabilityFit }}</span>
-                  <span class="landing-job-chip">{{ job.postedDate }}</span>
+                  <span class="landing-job-chip">{{ item.job.location }}</span>
+                  <span class="landing-job-chip">{{ item.job.setup }}</span>
+                  <span class="landing-job-chip">{{ item.job.vacancies }} Vacancies</span>
+                  <span class="landing-job-chip">{{ item.job.salary }}</span>
+                  <span class="landing-job-chip landing-job-chip-accent">{{ item.job.disabilityFit }}</span>
+                  <span class="landing-job-chip">{{ item.job.postedDate }}</span>
                 </div>
               </article>
+            </div>
+            <div v-if="featuredJobsTotalPages > 1" class="landing-job-pagination">
+              <button
+                type="button"
+                class="landing-page-btn"
+                :disabled="featuredJobsPage <= 1"
+                @click="goToPreviousFeaturedPage"
+              >
+                Previous
+              </button>
+              <span class="landing-page-indicator">
+                Page {{ featuredJobsPage }} of {{ featuredJobsTotalPages }}
+              </span>
+              <button
+                type="button"
+                class="landing-page-btn"
+                :disabled="featuredJobsPage >= featuredJobsTotalPages"
+                @click="goToNextFeaturedPage"
+              >
+                Next
+              </button>
             </div>
           </div>
 
           <div v-if="selectedFeaturedJob" class="about-cta-panel about-cta-actions landing-job-detail-panel">
             <h4>Job Details</h4>
             <p class="about-cta-actions-copy">
-              Makikita dito sa right side ang details ng job post na pinindot mo.
+              The full details of the selected job post will appear on the
+              right side.
             </p>
 
             <div class="landing-job-detail-head">
@@ -263,6 +288,17 @@
               <div class="landing-job-title-wrap">
                 <h5>{{ selectedFeaturedJob.title }}</h5>
                 <p>{{ selectedFeaturedJob.company }}</p>
+                <div
+                  class="landing-job-review"
+                  :aria-label="`Company review rating ${formatReviewRating(selectedFeaturedJob.reviewRating)} out of 5`"
+                >
+                  <span class="landing-job-review-stars" aria-hidden="true">
+                    {{ renderReviewStars(selectedFeaturedJob.reviewRating) }}
+                  </span>
+                  <span class="landing-job-review-value">
+                    {{ formatReviewRating(selectedFeaturedJob.reviewRating) }}/5
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -447,6 +483,7 @@ import heroSeal from "@/assets/logoproximity.png";
 import aboutPhoto from "@/assets/PWD_worker.png";
 import aboutPhoto2 from "@/assets/PWD_choose.png";
 import aboutPhoto3 from "@/assets/PWD_login.png";
+import api from "@/services/api";
 
 export default {
   name: "LandingPage",
@@ -470,6 +507,8 @@ export default {
       isTutorialVisible: false,
       selectedTutorialIndex: null,
       selectedFeaturedJobIndex: 0,
+      featuredJobsPage: 1,
+      featuredJobsPerPage: 3,
       isMobileMenuOpen: false,
       openDropdown: null,
       lastY: 0,
@@ -516,6 +555,7 @@ export default {
         "Retail and Sales",
         "Security and Safety"
       ],
+      allFeaturedJobPosts: [],
       featuredJobPosts: [
         {
           title: "Data Encoder",
@@ -526,6 +566,7 @@ export default {
           setup: "On-site / Hybrid",
           vacancies: 3,
           salary: "PHP 12,000 - PHP 15,000",
+          reviewRating: 4.6,
           disabilityFit: "Hearing / Speech Friendly",
           postedDate: "Posted: Feb 24, 2026",
           qualifications: [
@@ -548,6 +589,7 @@ export default {
           setup: "Hybrid",
           vacancies: 5,
           salary: "PHP 16,000 - PHP 21,000",
+          reviewRating: 4.5,
           disabilityFit: "Hearing / Physical Friendly",
           postedDate: "Posted: Feb 22, 2026",
           qualifications: [
@@ -570,6 +612,7 @@ export default {
           setup: "Remote",
           vacancies: 2,
           salary: "PHP 18,000 - PHP 24,000",
+          reviewRating: 4.7,
           disabilityFit: "Physical / Visual Support",
           postedDate: "Posted: Feb 20, 2026",
           qualifications: [
@@ -667,6 +710,7 @@ mounted() {
   this.onScroll();
   this.setupAboutObserver();
   this.setupTutorialObserver();
+  this.loadLandingFeaturedJobs();
 },
 beforeUnmount() {
   if (this.pageLoaderTimer) {
@@ -709,10 +753,190 @@ computed: {
     if (!Array.isArray(this.featuredJobPosts) || this.featuredJobPosts.length === 0) return null;
     const safeIndex = Math.max(0, Math.min(this.selectedFeaturedJobIndex, this.featuredJobPosts.length - 1));
     return this.featuredJobPosts[safeIndex];
+  },
+  featuredJobsTotalPages() {
+    const total = Array.isArray(this.featuredJobPosts) ? this.featuredJobPosts.length : 0;
+    return Math.max(1, Math.ceil(total / this.featuredJobsPerPage));
+  },
+  pagedFeaturedJobPosts() {
+    const list = Array.isArray(this.featuredJobPosts) ? this.featuredJobPosts : [];
+    if (!list.length) return [];
+    const currentPage = Math.max(1, Math.min(this.featuredJobsPage, this.featuredJobsTotalPages));
+    const start = (currentPage - 1) * this.featuredJobsPerPage;
+    return list.slice(start, start + this.featuredJobsPerPage).map((job, offset) => ({
+      job,
+      index: start + offset
+    }));
   }
 },
 
 methods: {
+normalizeText(value) {
+  return String(value || "").trim();
+},
+
+normalizeTextLower(value) {
+  return this.normalizeText(value).toLowerCase();
+},
+
+normalizeRating(value) {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(5, Math.max(0, Math.round(parsed * 10) / 10));
+},
+
+formatReviewRating(value) {
+  return this.normalizeRating(value).toFixed(1);
+},
+
+renderReviewStars(value) {
+  const rounded = Math.round(this.normalizeRating(value));
+  const filled = "★".repeat(rounded);
+  const empty = "☆".repeat(Math.max(0, 5 - rounded));
+  return `${filled}${empty}`;
+},
+
+toList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => this.normalizeText(item)).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => this.normalizeText(item)).filter(Boolean);
+      }
+    } catch {
+      // use plain string split fallback
+    }
+    return text
+      .split(/[\n,;|]/g)
+      .map((item) => item.replace(/^[\s•-]+/, "").trim())
+      .filter(Boolean);
+  }
+  return [];
+},
+
+formatLandingPostedDate(value) {
+  const raw = this.normalizeText(value);
+  if (!raw) return "Posted recently";
+  const parsed = Date.parse(raw);
+  if (Number.isNaN(parsed)) return `Posted: ${raw}`;
+  return `Posted: ${new Date(parsed).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  })}`;
+},
+
+deriveDisabilityFit(raw) {
+  const tags = [
+    ...this.toList(raw?.disabilityTypes),
+    ...this.toList(raw?.supportedDisabilities),
+    ...this.toList(raw?.disabilityType),
+    ...this.toList(raw?.disability_type),
+    ...this.toList(raw?.disability),
+  ];
+  const unique = Array.from(new Set(tags.filter(Boolean)));
+  return unique.length ? unique.slice(0, 2).join(" / ") : "PWD-friendly";
+},
+
+mapJobToLandingCard(raw, index = 0) {
+  const company = this.normalizeText(
+    raw?.companyName || raw?.company_name || raw?.company || "Company"
+  );
+  const title = this.normalizeText(raw?.title || raw?.jobTitle || raw?.position || "Untitled Role");
+  const qualifications = this.toList(raw?.qualifications);
+  const responsibilities = this.toList(raw?.responsibilities);
+  return {
+    id: this.normalizeText(raw?.id) || `landing-job-${index}`,
+    title,
+    company,
+    companyInitials: company
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "CO",
+    description: this.normalizeText(raw?.description || "No description provided."),
+    location: this.normalizeText(raw?.location || raw?.address || "Dasmarinas, Cavite"),
+    setup: this.normalizeText(raw?.type || raw?.employmentType || raw?.jobType || "Open"),
+    vacancies: Number(raw?.vacancies || raw?.slots || 1) || 1,
+    salary: this.normalizeText(raw?.salary || "Negotiable"),
+    reviewRating: this.normalizeRating(
+      raw?.reviewRating ||
+      raw?.rating ||
+      raw?.companyRating ||
+      raw?.averageRating
+    ),
+    disabilityFit: this.deriveDisabilityFit(raw),
+    postedDate: this.formatLandingPostedDate(raw?.createdAt || raw?.created_at || raw?.updatedAt || raw?.updated_at),
+    qualifications: qualifications.length ? qualifications : ["Please check full job details for qualifications."],
+    responsibilities: responsibilities.length ? responsibilities : ["Please check full job details for responsibilities."],
+    _raw: raw
+  };
+},
+
+applyLandingJobFilters() {
+  const keyword = this.normalizeTextLower(this.heroFilters.keyword);
+  const disability = this.normalizeTextLower(this.heroFilters.location);
+  const source = Array.isArray(this.allFeaturedJobPosts) && this.allFeaturedJobPosts.length
+    ? this.allFeaturedJobPosts
+    : [];
+
+  this.featuredJobPosts = source.filter((job) => {
+    const searchable = [
+      job.title,
+      job.company,
+      job.description,
+      job.location,
+      job.setup,
+      job.disabilityFit
+    ].map((value) => this.normalizeTextLower(value)).join(" ");
+
+    const keywordMatch = !keyword || searchable.includes(keyword);
+    const disabilityMatch = !disability || this.normalizeTextLower(job.disabilityFit).includes(disability);
+    return keywordMatch && disabilityMatch;
+  });
+
+  if (this.selectedFeaturedJobIndex >= this.featuredJobPosts.length) {
+    this.selectedFeaturedJobIndex = 0;
+  }
+  this.featuredJobsPage = 1;
+},
+
+async loadLandingFeaturedJobs() {
+  try {
+    const response = await api.get("/jobs");
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    const mapped = rows
+      .filter((raw) => {
+        const status = this.normalizeTextLower(raw?.status);
+        return !status || status === "open";
+      })
+      .sort((a, b) => {
+        const aTs = Date.parse(String(a?.createdAt || a?.created_at || a?.updatedAt || a?.updated_at || "")) || 0;
+        const bTs = Date.parse(String(b?.createdAt || b?.created_at || b?.updatedAt || b?.updated_at || "")) || 0;
+        return bTs - aTs;
+      })
+      .slice(0, 12)
+      .map((raw, index) => this.mapJobToLandingCard(raw, index));
+
+    if (mapped.length) {
+      this.allFeaturedJobPosts = mapped;
+      this.applyLandingJobFilters();
+      return;
+    }
+  } catch (error) {
+    console.error("Landing jobs load failed", error);
+  }
+
+  this.allFeaturedJobPosts = Array.isArray(this.featuredJobPosts) ? [...this.featuredJobPosts] : [];
+},
+
 syncBodyScrollLock() {
   const shouldLock = this.selectedTutorialIndex !== null || this.isMobileMenuOpen;
   document.body.style.overflow = shouldLock ? "hidden" : "";
@@ -743,6 +967,24 @@ onGlobalKeydown(e) {
 
 selectFeaturedJob(index) {
   this.selectedFeaturedJobIndex = index;
+},
+
+goToFeaturedPage(page) {
+  const totalPages = this.featuredJobsTotalPages;
+  const nextPage = Math.max(1, Math.min(page, totalPages));
+  this.featuredJobsPage = nextPage;
+  const startIndex = (nextPage - 1) * this.featuredJobsPerPage;
+  if (startIndex < this.featuredJobPosts.length) {
+    this.selectedFeaturedJobIndex = startIndex;
+  }
+},
+
+goToNextFeaturedPage() {
+  this.goToFeaturedPage(this.featuredJobsPage + 1);
+},
+
+goToPreviousFeaturedPage() {
+  this.goToFeaturedPage(this.featuredJobsPage - 1);
 },
 
 startAboutSlider() {
@@ -914,17 +1156,23 @@ toggleFaq(i) {
 
   async submitHeroSearch() {
     if (this.heroSearchLoading) return;
-    const query = {};
-    if (this.heroFilters.keyword) query.keyword = this.heroFilters.keyword;
-    if (this.heroFilters.location) query.location = this.heroFilters.location;
-
     this.heroSearchLoading = true;
     try {
-      await this.$router.push({ name: "SearchJobs", query });
+      const keyword = String(this.heroFilters.keyword || "").trim();
+      const disability = String(this.heroFilters.location || "").trim();
+
+      const query = {};
+      if (keyword) query.q = keyword;
+      if (disability) query.location = disability;
+
+      await this.$router.push({
+        path: "/search-jobs",
+        query
+      });
     } finally {
-      if (this.$route.name === "LandingPage") {
+      window.setTimeout(() => {
         this.heroSearchLoading = false;
-      }
+      }, 220);
     }
   },
 
@@ -2485,6 +2733,40 @@ h2{
   gap: 12px;
 }
 
+.landing-job-pagination {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.landing-page-btn {
+  border: 1px solid rgba(22, 163, 74, 0.45);
+  background: #ffffff;
+  color: #166534;
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 0.83rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.landing-page-btn:hover {
+  background: #f0fdf4;
+}
+
+.landing-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.landing-page-indicator {
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .landing-job-card {
   border: 1px solid rgba(148, 163, 184, 0.28);
   background: rgba(255, 255, 255, 0.94);
@@ -2542,6 +2824,31 @@ h2{
   margin: 3px 0 0;
   color: #475569;
   font-size: 0.88rem;
+}
+
+.landing-job-review {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #f0d88b;
+  background: #fffbeb;
+}
+
+.landing-job-review-stars {
+  color: #d97706;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.landing-job-review-value {
+  color: #7c2d12;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .landing-job-desc {

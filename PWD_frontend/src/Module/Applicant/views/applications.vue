@@ -39,11 +39,44 @@
       </div>
 
       <div v-else class="applications-list">
+        <div v-if="manageableApplications.length > 0" class="bulk-actions">
+          <button class="ghost-btn" type="button" @click="toggleSelectionMode">
+            {{ selectionMode ? "Done" : "Manage Applications" }}
+          </button>
+          <template v-if="selectionMode">
+            <label class="bulk-check">
+              <input
+                type="checkbox"
+                :checked="isAllRejectedSelected"
+                @change="toggleSelectAllRejected"
+              />
+              <span>Select all (rejected/deleted)</span>
+            </label>
+            <p class="bulk-meta">{{ selectedRejectedIds.length }} selected</p>
+            <button
+              class="ghost-btn"
+              type="button"
+              :disabled="selectedRejectedIds.length === 0 || deletingSelected"
+              @click="clearRejectedSelection"
+            >
+              Clear
+            </button>
+            <button
+              class="danger-soft-btn"
+              type="button"
+              :disabled="selectedRejectedIds.length === 0 || deletingSelected"
+              @click="deleteSelectedRejectedApplications"
+            >
+              {{ deletingSelected ? "Deleting..." : "Delete selected" }}
+            </button>
+          </template>
+        </div>
+
         <article
           v-for="app in filteredApplications"
           :key="app.id"
           class="application-item"
-          :class="{ active: selectedApplication?.id === app.id }"
+          :class="{ active: selectedApplication?.id === app.id, deleted: app.isJobDeleted }"
           @click="selectedApplication = app"
         >
           <div class="application-main">
@@ -55,6 +88,21 @@
             <div class="meta-row">
               <span><i class="bi bi-geo-alt"></i> {{ app.location || "Location not specified" }}</span>
               <span><i class="bi bi-calendar3"></i> Applied {{ app.appliedAtLabel }}</span>
+            </div>
+            <p v-if="app.isJobDeleted" class="deleted-note">
+              This job post was deleted by the company.
+            </p>
+            <div v-if="isManageableApplication(app)" class="application-actions">
+              <label v-if="selectionMode" class="item-check">
+                <input
+                  type="checkbox"
+                  :checked="isRejectedSelected(app.id)"
+                  :disabled="deletingSelected"
+                  @click.stop
+                  @change="toggleRejectedSelection(app.id)"
+                />
+                <span>Select</span>
+              </label>
             </div>
           </div>
         </article>
@@ -78,6 +126,10 @@
           </span>
         </div>
 
+        <div v-if="selectedApplication.isJobDeleted" class="deleted-banner">
+          This job post was deleted by the company. Your application remains here as history.
+        </div>
+
         <div class="details-grid">
           <div class="info-block">
             <h4>Application Summary</h4>
@@ -87,6 +139,10 @@
               <li><strong>Location:</strong> {{ selectedApplication.location || "Not specified" }}</li>
               <li><strong>Exact Address:</strong> {{ selectedApplication.exactAddress || "Not specified" }}</li>
               <li><strong>Work Type:</strong> {{ selectedApplication.jobType || "Not specified" }}</li>
+              <li v-if="selectedApplication.statusKey === 'rejected'">
+                <strong>Rejection Reason:</strong>
+                {{ selectedApplication.rejectionReason || "No rejection reason provided by HR yet." }}
+              </li>
             </ul>
           </div>
 
@@ -99,6 +155,14 @@
               <li><strong>Reference:</strong> {{ selectedApplication.jobId || "-" }}</li>
             </ul>
           </div>
+        </div>
+
+        <div
+          v-if="selectedApplication.statusKey === 'rejected'"
+          class="rejection-feedback"
+        >
+          <h4>Rejection Feedback</h4>
+          <p>{{ selectedApplication.rejectionReason || "No rejection reason provided by HR yet." }}</p>
         </div>
 
         <div class="timeline-block">
@@ -114,7 +178,7 @@
                 <small>{{ selectedApplication.appliedAtLabel }}</small>
               </div>
             </div>
-            <div class="timeline-item" :class="{ done: selectedTimeline.reviewDone }">
+            <div class="timeline-item" :class="{ done: selectedTimeline.reviewDone, failed: selectedTimeline.isRejected }">
               <span class="dot"></span>
               <div>
                 <p>Under review</p>
@@ -123,7 +187,11 @@
             </div>
             <div
               class="timeline-item"
-              :class="{ done: selectedTimeline.initialInterviewDone }"
+              :class="{
+                done: selectedTimeline.initialInterviewDone,
+                processing: selectedTimeline.initialInterviewProcessing,
+                failed: selectedTimeline.isRejected
+              }"
             >
               <span class="dot"></span>
               <div>
@@ -133,7 +201,11 @@
             </div>
             <div
               class="timeline-item"
-              :class="{ done: selectedTimeline.finalInterviewDone }"
+              :class="{
+                done: selectedTimeline.finalInterviewDone,
+                processing: selectedTimeline.finalInterviewProcessing,
+                failed: selectedTimeline.isRejected
+              }"
             >
               <span class="dot"></span>
               <div>
@@ -151,20 +223,24 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import api from "@/services/api"
-import { db } from "@/lib/client-platform"
-import { collection, onSnapshot, query, where } from "@/lib/laravel-data"
 
 const loading = ref(true)
 const rawApplications = ref([])
 const applications = ref([])
 const jobsById = ref({})
+const jobsMappingLoaded = ref(false)
 const selectedApplication = ref(null)
 const search = ref("")
 const statusFilter = ref("all")
 const interviewSchedules = ref([])
-let unsubscribeApplications = null
-let unsubscribeJobs = null
+const selectedRejectedIds = ref([])
+const deletingSelected = ref(false)
+const selectionMode = ref(false)
 let scheduleRefreshTimer = null
+let applicationsRefreshTimer = null
+let loadingWatchdogTimer = null
+const APPLICATIONS_API_TIMEOUT_MS = 12000
+const LOADING_WATCHDOG_MS = 15000
 
 function resolveApplicantIdentity() {
   return {
@@ -211,13 +287,46 @@ function normalizeStatus(rawStatus) {
   const s = String(rawStatus || "pending").trim().toLowerCase()
   if (["accepted", "hired"].includes(s)) return { key: "accepted", label: "Accepted" }
   if (["rejected", "declined"].includes(s)) return { key: "rejected", label: "Rejected" }
-  if (["interview", "for interview", "interview_scheduled"].includes(s)) return { key: "interview", label: "Interview" }
+  if (["interview", "for interview", "interview_scheduled", "interviewed"].includes(s)) return { key: "interview", label: "Interview" }
   if (["reviewed", "screening", "shortlisted"].includes(s)) return { key: "reviewed", label: "Reviewed" }
   return { key: "pending", label: "Pending" }
 }
 
 function normalizeScheduleStatus(rawStatus) {
   return String(rawStatus || "scheduled").trim().toLowerCase()
+}
+
+function toTitle(value) {
+  const raw = String(value || "").trim().toLowerCase()
+  if (!raw) return "Unknown"
+  return `${raw.charAt(0).toUpperCase()}${raw.slice(1)}`
+}
+
+function startLoadingWatchdog() {
+  stopLoadingWatchdog()
+  loadingWatchdogTimer = setTimeout(() => {
+    loading.value = false
+  }, LOADING_WATCHDOG_MS)
+}
+
+function stopLoadingWatchdog() {
+  if (loadingWatchdogTimer) {
+    clearTimeout(loadingWatchdogTimer)
+    loadingWatchdogTimer = null
+  }
+}
+
+function withTimeout(promise, timeoutMs = APPLICATIONS_API_TIMEOUT_MS, message = "Request timed out") {
+  let timeoutId = null
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(message))
+    }, timeoutMs)
+  })
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId)
+  })
 }
 
 async function loadInterviewSchedules(identity) {
@@ -231,7 +340,11 @@ async function loadInterviewSchedules(identity) {
   }
 
   try {
-    const res = await api.get("/interview-schedules", { params })
+    const res = await withTimeout(
+      api.get("/interview-schedules", { params }),
+      APPLICATIONS_API_TIMEOUT_MS,
+      "Interview schedules request timed out."
+    )
     interviewSchedules.value = Array.isArray(res?.data) ? res.data : []
   } catch {
     interviewSchedules.value = []
@@ -245,43 +358,100 @@ const selectedTimeline = computed(() => {
       reviewDone: false,
       reviewText: "Waiting for HR review",
       initialInterviewDone: false,
+      initialInterviewProcessing: false,
       initialInterviewText: "No initial interview schedule yet",
       finalInterviewDone: false,
+      finalInterviewProcessing: false,
       finalInterviewText: "No final interview schedule yet",
     }
   }
 
   const statusKey = String(app.statusKey || "pending").toLowerCase()
+  const isRejected = statusKey === "rejected"
   const reviewDone = statusKey !== "pending"
 
-  const related = interviewSchedules.value.filter((row) => String(row?.applicationId || "").trim() === String(app.id || "").trim())
-  const activeInitial = related.some((row) => {
-    const type = String(row?.interviewType || "initial").trim().toLowerCase()
-    const status = normalizeScheduleStatus(row?.scheduleStatus)
-    return type === "initial" && status !== "cancelled"
-  })
-  const activeFinal = related.some((row) => {
-    const type = String(row?.interviewType || "").trim().toLowerCase()
-    const status = normalizeScheduleStatus(row?.scheduleStatus)
-    return type === "final" && status !== "cancelled"
-  })
+  const related = interviewSchedules.value.filter(
+    (row) => String(row?.applicationId || "").trim() === String(app.id || "").trim()
+  )
+
+  const resolveInterviewStage = (type) => {
+    const stageRows = related.filter(
+      (row) => String(row?.interviewType || "").trim().toLowerCase() === type
+    )
+    const statuses = stageRows.map((row) => normalizeScheduleStatus(row?.scheduleStatus))
+    const hasCompleted = statuses.includes("completed")
+    const hasProcessing = statuses.some((status) => ["scheduled", "reschedule_requested"].includes(status))
+    const hasCancelledOnly = statuses.length > 0 && statuses.every((status) => status === "cancelled")
+
+    if (isRejected) {
+      return {
+        done: false,
+        processing: false,
+        text: "Not applicable due to rejection",
+      }
+    }
+    if (hasCompleted) {
+      return {
+        done: true,
+        processing: false,
+        text: `Passed ${type} interview`,
+      }
+    }
+    if (hasProcessing) {
+      return {
+        done: false,
+        processing: true,
+        text: `${toTitle(type)} interview is being processed`,
+      }
+    }
+    if (hasCancelledOnly) {
+      return {
+        done: false,
+        processing: false,
+        text: `${toTitle(type)} interview was cancelled`,
+      }
+    }
+    return {
+      done: false,
+      processing: false,
+      text: `No ${type} interview schedule yet`,
+    }
+  }
+
+  const initialInterview = resolveInterviewStage("initial")
+  const finalInterview = resolveInterviewStage("final")
 
   return {
+    isRejected,
     reviewDone,
-    reviewText: reviewDone ? "Reviewed by HR" : "Waiting for HR review",
-    initialInterviewDone: activeInitial,
-    initialInterviewText: activeInitial ? "Initial interview schedule is set" : "No initial interview schedule yet",
-    finalInterviewDone: activeFinal,
-    finalInterviewText: activeFinal ? "Final interview schedule is set" : "No final interview schedule yet",
+    reviewText: isRejected
+      ? "Application rejected by HR"
+      : (reviewDone ? "Reviewed by HR" : "Waiting for HR review"),
+    initialInterviewDone: initialInterview.done,
+    initialInterviewProcessing: initialInterview.processing,
+    initialInterviewText: initialInterview.text,
+    finalInterviewDone: finalInterview.done,
+    finalInterviewProcessing: finalInterview.processing,
+    finalInterviewText: finalInterview.text,
   }
 })
 
 function rebuildApplications() {
   const rows = rawApplications.value.map((rawDoc) => {
     const raw = rawDoc.raw || {}
+    const resolvedRejectionReason = String(
+      raw.rejectionReason ||
+      raw.rejection_reason ||
+      raw.reviewNote ||
+      raw.review_note ||
+      raw.notes ||
+      raw.note ||
+      ""
+    ).trim()
     const normalized = normalizeStatus(raw.status)
     const jobId = String(raw.jobId || "").trim()
     const linkedJob = jobsById.value[jobId] || {}
+    const isDeleted = Boolean(jobId) && jobsMappingLoaded.value && !linkedJob?.id
     const barangay = String(
       raw.location ||
       raw.jobLocation ||
@@ -310,8 +480,10 @@ function rebuildApplications() {
       salary: String(raw.salary || raw.salaryRange || linkedJob.salary || linkedJob.salaryRange || "").trim(),
       vacancies: String(raw.vacancies || raw.slots || linkedJob.vacancies || linkedJob.slots || "").trim(),
       disabilityType: String(raw.disabilityType || raw.disability || linkedJob.disabilityType || linkedJob.disability || "").trim(),
+      isJobDeleted: isDeleted,
       statusKey: normalized.key,
       statusLabel: normalized.label,
+      rejectionReason: resolvedRejectionReason,
       appliedAtRaw: raw.appliedAt || raw.createdAt || raw.updatedAt || null,
       appliedAtLabel: formatDateLabel(raw.appliedAt || raw.createdAt || raw.updatedAt || null),
       appliedAtMillis: toMillis(raw.appliedAt || raw.createdAt || raw.updatedAt || null),
@@ -319,6 +491,12 @@ function rebuildApplications() {
   }).sort((a, b) => b.appliedAtMillis - a.appliedAtMillis)
 
   applications.value = rows
+  const validRejectedIds = new Set(
+    rows
+      .filter((row) => row.statusKey === "rejected" || row.isJobDeleted)
+      .map((row) => row.id)
+  )
+  selectedRejectedIds.value = selectedRejectedIds.value.filter((id) => validRejectedIds.has(id))
   if (!selectedApplication.value || !rows.find((r) => r.id === selectedApplication.value.id)) {
     selectedApplication.value = rows[0] || null
   } else {
@@ -326,75 +504,168 @@ function rebuildApplications() {
   }
 }
 
-onMounted(() => {
-  const identity = resolveApplicantIdentity()
-  void loadInterviewSchedules(identity)
-  scheduleRefreshTimer = setInterval(() => {
-    void loadInterviewSchedules(identity)
-  }, 5000)
+async function loadJobsForMapping() {
+  try {
+    const response = await withTimeout(
+      api.get("/jobs"),
+      APPLICATIONS_API_TIMEOUT_MS,
+      "Jobs mapping request timed out."
+    )
+    const rows = Array.isArray(response?.data) ? response.data : []
+    const next = {}
+    rows.forEach((raw, idx) => {
+      const id = String(raw?.id || raw?.jobId || idx).trim()
+      if (!id) return
+      next[id] = raw
+    })
+    jobsById.value = next
+    jobsMappingLoaded.value = true
+  } catch {
+    jobsMappingLoaded.value = false
+  }
+}
 
-  unsubscribeJobs = onSnapshot(
-    collection(db, "jobs"),
-    (snapshot) => {
-      const next = {}
-      snapshot.docs.forEach((docSnap) => {
-        const raw = docSnap.data() || {}
-        const id = String(raw.id || docSnap.id || "").trim()
-        if (!id) return
-        next[id] = raw
-      })
-      jobsById.value = next
-      rebuildApplications()
-    },
-    () => {
-      jobsById.value = {}
-      rebuildApplications()
-    }
-  )
-
-  let target = null
-
-  if (identity.id) {
-    target = query(collection(db, "applications"), where("applicantId", "==", identity.id))
-  } else if (identity.email) {
-    target = query(collection(db, "applications"), where("applicantEmail", "==", identity.email))
+async function loadApplicationsFromApi(identity) {
+  if (loading.value) {
+    startLoadingWatchdog()
   }
 
-  if (!target) {
-    loading.value = false
+  if (!identity?.id && !identity?.email) {
+    rawApplications.value = []
     applications.value = []
+    selectedApplication.value = null
+    loading.value = false
+    stopLoadingWatchdog()
     return
   }
 
-  unsubscribeApplications = onSnapshot(
-    target,
-    (snapshot) => {
-      rawApplications.value = snapshot.docs.map((docSnap) => ({
-        id: String(docSnap.id || ""),
-        raw: docSnap.data() || {},
-      }))
+  const params = {}
+  if (identity?.id) params.applicantId = identity.id
+  if (identity?.email) params.applicantEmail = identity.email
+
+  try {
+    const response = await withTimeout(
+      api.get("/applications", { params }),
+      APPLICATIONS_API_TIMEOUT_MS,
+      "Applications request timed out."
+    )
+    const rows = Array.isArray(response?.data) ? response.data : []
+    rawApplications.value = rows.map((row) => ({
+      id: String(row?.id || ""),
+      raw: row || {},
+    }))
+    rebuildApplications()
+    // Load job mapping after primary list render to avoid blocking the page.
+    void loadJobsForMapping().then(() => {
       rebuildApplications()
-      loading.value = false
-    },
-    () => {
-      rawApplications.value = []
-      applications.value = []
-      selectedApplication.value = null
-      loading.value = false
-    }
+    })
+  } catch {
+    rawApplications.value = []
+    applications.value = []
+    selectedApplication.value = null
+  } finally {
+    loading.value = false
+    stopLoadingWatchdog()
+  }
+}
+
+function isManageableApplication(app) {
+  return String(app?.statusKey || "").toLowerCase() === "rejected" || Boolean(app?.isJobDeleted)
+}
+
+const manageableApplications = computed(() =>
+  filteredApplications.value.filter((app) => isManageableApplication(app))
+)
+
+const isAllRejectedSelected = computed(() => {
+  if (manageableApplications.value.length === 0) return false
+  return manageableApplications.value.every((app) => selectedRejectedIds.value.includes(app.id))
+})
+
+function isRejectedSelected(applicationId) {
+  return selectedRejectedIds.value.includes(String(applicationId || ""))
+}
+
+function toggleRejectedSelection(applicationId) {
+  const id = String(applicationId || "").trim()
+  if (!id) return
+  if (selectedRejectedIds.value.includes(id)) {
+    selectedRejectedIds.value = selectedRejectedIds.value.filter((item) => item !== id)
+  } else {
+    selectedRejectedIds.value = [...selectedRejectedIds.value, id]
+  }
+}
+
+function toggleSelectAllRejected() {
+  if (isAllRejectedSelected.value) {
+    selectedRejectedIds.value = selectedRejectedIds.value.filter(
+      (id) => !manageableApplications.value.some((app) => app.id === id)
+    )
+    return
+  }
+  const merge = new Set(selectedRejectedIds.value)
+  manageableApplications.value.forEach((app) => merge.add(app.id))
+  selectedRejectedIds.value = Array.from(merge)
+}
+
+function clearRejectedSelection() {
+  selectedRejectedIds.value = []
+}
+
+function toggleSelectionMode() {
+  selectionMode.value = !selectionMode.value
+  if (!selectionMode.value) {
+    clearRejectedSelection()
+  }
+}
+
+async function deleteSelectedRejectedApplications() {
+  if (deletingSelected.value) return
+  const idsToDelete = selectedRejectedIds.value.filter((id) =>
+    applications.value.some((app) => app.id === id && isManageableApplication(app))
   )
+  if (!idsToDelete.length) return
+
+  deletingSelected.value = true
+  try {
+    await Promise.all(idsToDelete.map((id) => api.delete(`/applications/${id}`)))
+    selectedRejectedIds.value = []
+    selectionMode.value = false
+    const identity = resolveApplicantIdentity()
+    await loadApplicationsFromApi(identity)
+    await loadInterviewSchedules(identity)
+  } catch {
+    // keep silent fallback; failed deletions will remain in list
+  } finally {
+    deletingSelected.value = false
+  }
+}
+
+onMounted(() => {
+  const identity = resolveApplicantIdentity()
+  void loadInterviewSchedules(identity)
+  loading.value = true
+  startLoadingWatchdog()
+  void loadApplicationsFromApi(identity).then(() => {
+    rebuildApplications()
+  })
+
+  scheduleRefreshTimer = setInterval(() => {
+    void loadInterviewSchedules(identity)
+  }, 5000)
+  applicationsRefreshTimer = setInterval(() => {
+    void loadApplicationsFromApi(identity)
+  }, 5000)
 })
 
 onBeforeUnmount(() => {
   if (scheduleRefreshTimer) {
     clearInterval(scheduleRefreshTimer)
   }
-  if (typeof unsubscribeJobs === "function") {
-    unsubscribeJobs()
+  if (applicationsRefreshTimer) {
+    clearInterval(applicationsRefreshTimer)
   }
-  if (typeof unsubscribeApplications === "function") {
-    unsubscribeApplications()
-  }
+  stopLoadingWatchdog()
 })
 
 const filteredApplications = computed(() => {
@@ -550,6 +821,34 @@ const filteredApplications = computed(() => {
   padding: 14px 16px 16px;
 }
 
+.bulk-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px 12px;
+  flex-wrap: wrap;
+}
+
+.bulk-check {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bulk-meta {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .application-item {
   border: 1px solid #e5e7eb;
   border-radius: 14px;
@@ -567,6 +866,32 @@ const filteredApplications = computed(() => {
 .application-item.active {
   border-color: #bbf7d0;
   background: #f0fdf4;
+}
+
+.application-item.deleted {
+  opacity: 0.62;
+  border-style: dashed;
+}
+
+.application-item.deleted.active {
+  opacity: 0.8;
+}
+
+.application-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.item-check {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .title-row {
@@ -603,6 +928,13 @@ const filteredApplications = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.deleted-note {
+  margin: 8px 0 0;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .status-pill {
@@ -674,6 +1006,17 @@ const filteredApplications = computed(() => {
   gap: 12px;
 }
 
+.deleted-banner {
+  margin-top: 12px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .info-block {
   border: 1px solid #e5e7eb;
   border-radius: 14px;
@@ -700,6 +1043,60 @@ const filteredApplications = computed(() => {
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   padding: 14px;
+}
+
+.rejection-feedback {
+  margin-top: 12px;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.rejection-feedback h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #991b1b;
+}
+
+.rejection-feedback p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.ghost-btn {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ghost-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.danger-soft-btn {
+  border: 1px solid #fca5a5;
+  background: #fff1f2;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.danger-soft-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .timeline-head h4 {
@@ -737,6 +1134,22 @@ const filteredApplications = computed(() => {
 
 .timeline-item.done .dot {
   background: #22c55e;
+}
+
+.timeline-item.processing .dot {
+  background: #f59e0b;
+}
+
+.timeline-item.failed .dot {
+  background: #ef4444;
+}
+
+.timeline-item.failed p {
+  color: #991b1b;
+}
+
+.timeline-item.failed small {
+  color: #b91c1c;
 }
 
 .timeline-item p {
@@ -778,6 +1191,11 @@ const filteredApplications = computed(() => {
 @media (max-width: 700px) {
   .application-item {
     display: block;
+  }
+
+  .bulk-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

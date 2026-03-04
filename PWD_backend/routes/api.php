@@ -2,7 +2,9 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AccountApprovalController;
 use App\Http\Controllers\Api\ApplicationController;
+use App\Http\Controllers\Api\InterviewScheduleController;
 use App\Http\Controllers\Api\JobController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\UploadController;
@@ -26,6 +28,8 @@ Route::post('/auth/session/logout', [AuthController::class, 'logoutSession']);
 Route::post('/auth/otp/send', [AuthController::class, 'sendOtp']);
 Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
 Route::post('/auth/password/reset', [AuthController::class, 'resetPassword']);
+Route::get('/admin/account-approvals', [AccountApprovalController::class, 'index']);
+Route::put('/admin/account-approvals/{id}', [AccountApprovalController::class, 'update']);
 
 Route::get('/users', [UserController::class, 'index']);
 Route::post('/users', [UserController::class, 'store']);
@@ -43,6 +47,12 @@ Route::delete('/jobs/{id}', [JobController::class, 'destroy']);
 Route::get('/applications', [ApplicationController::class, 'index']);
 Route::post('/applications', [ApplicationController::class, 'store']);
 Route::put('/applications/{id}', [ApplicationController::class, 'update']);
+Route::delete('/applications/{id}', [ApplicationController::class, 'destroy']);
+
+Route::get('/interview-schedules', [InterviewScheduleController::class, 'index']);
+Route::post('/interview-schedules', [InterviewScheduleController::class, 'store']);
+Route::put('/interview-schedules/{id}', [InterviewScheduleController::class, 'update']);
+Route::delete('/interview-schedules/{id}', [InterviewScheduleController::class, 'destroy']);
 
 Route::get('/logs', [LogController::class, 'index']);
 

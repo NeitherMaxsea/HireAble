@@ -7,8 +7,6 @@
     ]"
   >
     <div class="brand">
-      <img src="@/assets/whitelogo.png" class="logo" alt="HireAble" />
-
       <button class="collapse-btn" @click="toggleSidebar">
         <i class="bi bi-list"></i>
       </button>
@@ -197,8 +195,9 @@ async function logout() {
     duration: 3000,
     close: true,
     stopOnFocus: true,
+      className: 'toast-no-timer',
     style: {
-      background: "#0f172a"
+      background: "#16a34a"
     }
   }).showToast()
 }
@@ -275,40 +274,39 @@ function goProfile() {
   padding: 22px 10px;
 }
 
-.logo {
-  width: 80px;
-  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.sidebar.collapsed .logo {
-  width: 42px;
-}
-
 .brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 30px;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+  min-height: 40px;
 }
 
 .collapse-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   background: none;
   border: none;
-  position: relative;
-  left: 10px;
   font-size: 22px;
   cursor: pointer;
   color: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
 }
 
 .collapse-btn:hover {
   background: rgba(0, 0, 0, 0.05);
+}
+
+.sidebar.collapsed .brand {
+  justify-content: center;
+}
+
+.sidebar.collapsed .collapse-btn {
+  margin-left: 0;
 }
 
 .nav-link {

@@ -177,7 +177,8 @@ function handleToggleSidebar() {
   --company-brand-dark: #0042bd;
   display: grid;
   grid-template-columns: auto 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background:
     radial-gradient(900px 420px at 8% -8%, #dbeafe 0%, rgba(219, 234, 254, 0) 65%),
     radial-gradient(1000px 480px at 110% 10%, #fde68a 0%, rgba(253, 230, 138, 0) 55%),
@@ -186,6 +187,8 @@ function handleToggleSidebar() {
 
 .sidebar {
   width: 280px;
+  height: 100vh;
+  overflow: hidden;
   background: linear-gradient(180deg, #06132d 0%, #0b234f 100%);
   color: #e2e8f0;
   padding: 22px;
@@ -291,8 +294,10 @@ function handleToggleSidebar() {
   /* Grid places this automatically in column 2 */
   flex: 1;
   min-width: 0;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -349,6 +354,8 @@ function handleToggleSidebar() {
 .content {
   flex: 1;
   padding: 0 20px 20px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .overlay {
@@ -369,6 +376,7 @@ function handleToggleSidebar() {
     transform: translateX(-105%);
     transition: transform 0.25s ease;
     width: 280px;
+    height: 100vh;
     box-shadow: 10px 0 40px rgba(2, 6, 23, 0.25);
   }
 

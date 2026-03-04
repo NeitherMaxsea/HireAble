@@ -1,3 +1,39 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Force Toastify notifications to appear centered across the app. */
+.toastify {
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  max-width: min(92vw, 540px);
+  position: relative;
+  overflow: hidden;
+  --toast-duration: 5000ms;
+}
+
+.toastify::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.78);
+  transform-origin: left center;
+  animation: toastify-countdown var(--toast-duration) linear forwards;
+}
+
+.toastify.toast-no-timer::after {
+  display: none !important;
+}
+
+.toast-close {
+  display: none !important;
+}
+
+@keyframes toastify-countdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}

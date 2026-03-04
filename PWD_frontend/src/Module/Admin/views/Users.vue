@@ -61,7 +61,6 @@
             <th>Email</th>
             <th>Role</th>
             <th>Status</th>
-            <th>Laravel Sync</th>
             <th>Last Login</th>
             <th>Last Logout</th>
             <th>Created</th>
@@ -83,32 +82,12 @@
                 {{ user.statusLabel }}
               </span>
             </td>
-            <td>
-              <span class="sync-badge" :class="user.syncState">
-                {{ user.syncLabel }}
-              </span>
-            </td>
             <td>{{ user.lastLoginLabel }}</td>
             <td>{{ user.lastLogoutLabel }}</td>
             <td>{{ user.createdLabel }}</td>
             <td class="actions-cell">
               <button class="action-btn view" @click="openViewModal(user)">View</button>
               <button class="action-btn edit" @click="openEditModal(user)">Edit</button>
-              <button
-                v-if="user.status !== 'suspended'"
-                class="action-btn suspend"
-                @click="setUserSuspended(user, true)"
-              >
-                Suspend
-              </button>
-              <button
-                v-else
-                class="action-btn unsuspend"
-                @click="setUserSuspended(user, false)"
-              >
-                Unsuspend
-              </button>
-              <button class="action-btn delete" @click="openDeleteModal(user)">Delete</button>
             </td>
           </tr>
         </tbody>
@@ -131,7 +110,6 @@
           <p><strong>Email:</strong> {{ selectedUser.email || "-" }}</p>
           <p><strong>Role:</strong> {{ selectedUser.roleLabel }}</p>
           <p><strong>Status:</strong> {{ selectedUser.statusLabel }}</p>
-          <p><strong>Laravel Sync:</strong> {{ selectedUser.syncLabel }}</p>
           <p v-if="selectedUser.role === 'applicant'"><strong>Profile Completed:</strong> {{ selectedUser.profileCompletedLabel }}</p>
           <p><strong>Last Login:</strong> {{ selectedUser.lastLoginLabel }}</p>
           <p><strong>Last Logout:</strong> {{ selectedUser.lastLogoutLabel }}</p>
@@ -154,11 +132,7 @@
               <p><strong>Sex at Birth:</strong> {{ selectedUser.sexAtBirth || "-" }}</p>
               <p><strong>Date of Birth:</strong> {{ selectedUser.dateOfBirth || "-" }}</p>
               <p><strong>Academic Level:</strong> {{ selectedUser.academicLevel || "-" }}</p>
-              <p><strong>Preferred Role:</strong> {{ selectedUser.preferredRole || "-" }}</p>
-              <p><strong>Years of Experience:</strong> {{ selectedUser.yearsOfExperience || "-" }}</p>
-              <p><strong>Work Mode:</strong> {{ selectedUser.workMode || "-" }}</p>
               <p><strong>Address:</strong> {{ selectedUser.addressLabel || "-" }}</p>
-              <p><strong>Preferred Location:</strong> {{ selectedUser.preferredLocationLabel || "-" }}</p>
               <p><strong>Salary Range:</strong> {{ selectedUser.salaryRangeLabel || "-" }}</p>
               <p><strong>PWD ID Number:</strong> {{ selectedUser.pwdIdNumber || "-" }}</p>
             </div>
@@ -220,28 +194,6 @@
       </div>
     </div>
 
-    <div v-if="showDeleteModal && userToDelete" class="modal-overlay" @click.self="cancelDeleteModal">
-      <div class="modal-card">
-        <div class="modal-head">
-          <h3>Delete User</h3>
-          <button class="close-btn" @click="cancelDeleteModal">x</button>
-        </div>
-        <div class="modal-body">
-          <p>
-            Are you sure you want to delete
-            <strong>{{ userToDelete.displayName || userToDelete.email || "this user" }}</strong
-            >?
-          </p>
-          <p class="hint">This action cannot be undone.</p>
-        </div>
-        <div class="modal-actions">
-          <button class="cancel-btn" @click="cancelDeleteModal" :disabled="deleteLoading">Cancel</button>
-          <button class="delete-btn" @click="confirmDeleteUser" :disabled="deleteLoading">
-            {{ deleteLoading ? "Deleting..." : "Delete" }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -252,6 +204,7 @@ import { collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp
 import { auth, db } from "@/lib/client-platform"
 import Toastify from "toastify-js"
 import "toastify-js/src/toastify.css"
+import api from "@/services/api"
 
 const users = ref([])
 const loading = ref(true)
@@ -569,6 +522,15 @@ async function confirmDeleteUser() {
   deleteLoading.value = true
 
   try {
+    try {
+      await api.delete(`/users/${encodeURIComponent(String(user.id || "").trim())}`)
+    } catch (apiErr) {
+      const status = Number(apiErr?.response?.status || 0)
+      if (status !== 404) {
+        throw apiErr
+      }
+    }
+
     await deleteDoc(doc(db, user.collectionName || "users", user.id))
     users.value = users.value.filter((u) => u.id !== user.id)
     if (selectedUser.value?.id === user.id) {
@@ -578,10 +540,19 @@ async function confirmDeleteUser() {
     }
     showDeleteModal.value = false
     userToDelete.value = null
-    toastSuccess("User has been deleted.")
+    toastSuccess("User and related records have been deleted.")
   } catch (err) {
     const altCollection = (user.collectionName || "users") === "users" ? "Users" : "users"
     try {
+      try {
+        await api.delete(`/users/${encodeURIComponent(String(user.id || "").trim())}`)
+      } catch (apiErr) {
+        const status = Number(apiErr?.response?.status || 0)
+        if (status !== 404) {
+          throw apiErr
+        }
+      }
+
       await deleteDoc(doc(db, altCollection, user.id))
       users.value = users.value.filter((u) => u.id !== user.id)
       if (selectedUser.value?.id === user.id) {
@@ -591,7 +562,7 @@ async function confirmDeleteUser() {
       }
       showDeleteModal.value = false
       userToDelete.value = null
-      toastSuccess("User has been deleted.")
+      toastSuccess("User and related records have been deleted.")
     } catch (finalErr) {
       console.error(finalErr)
       loadError.value = "Failed to delete user. Check Laravel Rules/admin access."

@@ -44,6 +44,17 @@
               </div>
 
               <div>
+                <label>Vacancies *</label>
+                <input
+                  v-model.number="job.vacancies"
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="e.g. 3"
+                >
+              </div>
+
+              <div>
                 <label>Disability *</label>
                 <select v-model="job.disabilityType">
                   <option disabled value="">Select Disability</option>
@@ -70,6 +81,37 @@
             ></textarea>
           </div>
 
+          <div class="card">
+            <h3>Job Details (Required)</h3>
+
+            <div class="grid">
+              <div>
+                <label>Qualifications *</label>
+                <textarea v-model="job.qualifications" rows="3"></textarea>
+              </div>
+
+              <div>
+                <label>Workplace Accommodations *</label>
+                <input v-model="job.accommodations">
+              </div>
+
+              <div>
+                <label>Salary Range *</label>
+                <input
+                  v-model="job.salary"
+                  placeholder="e.g. PHP 12,000 - PHP 15,000"
+                  @input="formatSalaryRangeInput"
+                  @blur="formatSalaryRangeInput"
+                >
+              </div>
+
+              <div>
+                <label>Benefits</label>
+                <input v-model="job.benefits">
+              </div>
+            </div>
+          </div>
+
           <!-- JOB PHOTOS -->
           <div class="card">
             <h3>Job Photos (Max 2)</h3>
@@ -90,68 +132,11 @@
             </div>
           </div>
 
-
-          <!-- TOGGLE OPTIONAL -->
-          <button class="toggle-btn" @click="showMore = !showMore">
-            {{ showMore ? "Hide Optional Fields" : "Add More Details (Optional)" }}
-          </button>
-
-          <!-- OPTIONAL FIELDS -->
-          <div v-if="showMore">
-
-            <div class="card">
-              <h3>Qualifications</h3>
-              <textarea v-model="job.qualifications" rows="3"></textarea>
-            </div>
-
-            <div class="card">
-              <h3>Accessibility Information</h3>
-
-              <div class="grid">
-                <div>
-                  <label>Supported Disability Type</label>
-                  <select v-model="job.disabilityType">
-                    <option disabled value="">Select Disability</option>
-                    <option>Hearing</option>
-                    <option>Visual</option>
-                    <option>Mobility</option>
-                    <option>Physical Impairment</option>
-                    <option>Intellectual</option>
-                    <option>Psychosocial</option>
-                    <option>Multiple</option>
-                    <option>Others</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label>Workplace Accommodations</label>
-                  <input v-model="job.accommodations">
-                </div>
-              </div>
-            </div>
-
-            <div class="card">
-              <h3>Salary & Benefits</h3>
-
-              <div class="grid">
-                <div>
-                  <label>Salary Range</label>
-                  <input v-model="job.salary">
-                </div>
-
-                <div>
-                  <label>Benefits</label>
-                  <input v-model="job.benefits">
-                </div>
-              </div>
-            </div>
-
-          </div>
-
           <!-- ACTION -->
           <div class="actions">
-            <button class="save" @click="saveJob">
-              Save Job Post
+            <button class="save" :disabled="savingJob" @click="saveJob">
+              <span v-if="savingJob" class="btn-spinner" aria-hidden="true"></span>
+              {{ savingJob ? "Saving..." : "Save Job Post" }}
             </button>
           </div>
 
@@ -171,8 +156,8 @@ import "toastify-js/src/toastify.css"
 import { DASMA_BARANGAYS } from "@/constants/dasmaBarangays"
 
 const toast = {
-  success(text) {
-    Toastify({ text, backgroundColor: "#16a34a" }).showToast()
+  success(text, noTimer = false) {
+    Toastify({ text, backgroundColor: "#16a34a", className: noTimer ? "toast-no-timer" : "" }).showToast()
   },
   error(text) {
     Toastify({ text, backgroundColor: "#dc2626" }).showToast()
@@ -190,18 +175,19 @@ export default {
 
   data() {
       return {
-        showMore: false,
         dasmaBarangays: DASMA_BARANGAYS,
         imageFile: null,
         preview: null,
         imageFile2: null,
         preview2: null,
+        savingJob: false,
 
         job: {
           title: "",
           location: "",
           exactAddress: "",
           type: "",
+          vacancies: 1,
           description: "",
           qualifications: "",
           disabilityType: "",
@@ -494,19 +480,97 @@ export default {
       return `${this.getApiOrigin()}/api/uploads/${encodedPath}`
     },
 
+    formatMoneyValue(value) {
+      const numeric = Number(String(value || "").replace(/,/g, ""))
+      if (!Number.isFinite(numeric)) return ""
+      return new Intl.NumberFormat("en-PH", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(numeric)
+    },
+
+    normalizeSalaryRange(text, keepPendingRange = false) {
+      const input = String(text || "").trim()
+      if (!input) return ""
+
+      const peso = "\u20B1"
+      const normalized = input
+        .replace(/\u20B1/g, "")
+        .replace(/\bphp\b/gi, "")
+        .replace(/[\u2013\u2014]/g, "-")
+        .replace(/\s+/g, " ")
+        .trim()
+
+      const separatorIndex = normalized.indexOf("-")
+      if (separatorIndex >= 0) {
+        const leftRaw = normalized.slice(0, separatorIndex)
+        const rightRaw = normalized.slice(separatorIndex + 1)
+        const leftMatch = leftRaw.match(/\d[\d,]*(?:\.\d{1,2})?/)
+        if (!leftMatch) return ""
+
+        const first = this.formatMoneyValue(leftMatch[0])
+        if (!first) return ""
+
+        const rightMatch = rightRaw.match(/\d[\d,]*(?:\.\d{1,2})?/)
+        if (!rightMatch) return keepPendingRange ? `${peso}${first} - ` : `${peso}${first}`
+
+        const second = this.formatMoneyValue(rightMatch[0])
+        if (!second) return keepPendingRange ? `${peso}${first} - ` : `${peso}${first}`
+
+        return `${peso}${first} - ${peso}${second}`
+      }
+
+      const values = normalized.match(/\d[\d,]*(?:\.\d{1,2})?/g) || []
+      if (!values.length) return ""
+
+      const first = this.formatMoneyValue(values[0])
+      if (!first) return ""
+
+      if (values.length === 1) return `${peso}${first}`
+
+      const second = this.formatMoneyValue(values[1])
+      if (!second) return `${peso}${first}`
+
+      return `${peso}${first} - ${peso}${second}`
+    },
+
+    formatSalaryRangeInput(event) {
+      const raw = event?.target?.value ?? this.job.salary
+      const formatted = this.normalizeSalaryRange(raw, true)
+      this.job.salary = formatted
+      if (event?.target) {
+        event.target.value = formatted
+      }
+    },
+
+    normalizeVacanciesInput(value) {
+      const parsed = parseInt(String(value ?? "").trim(), 10)
+      if (!Number.isFinite(parsed) || parsed < 1) return 1
+      return parsed
+    },
+
     async saveJob() {
+      if (this.savingJob) return
+      this.job.salary = this.normalizeSalaryRange(this.job.salary)
+      this.job.vacancies = this.normalizeVacanciesInput(this.job.vacancies)
 
       if (
         !this.job.title ||
         !this.job.location ||
         !this.job.exactAddress ||
         !this.job.type ||
-        !this.job.description
+        !this.job.vacancies ||
+        !this.job.description ||
+        !this.job.qualifications ||
+        !this.job.accommodations ||
+        !this.job.salary ||
+        !this.job.disabilityType
       ) {
         toast.warning("Please fill required fields")
         return
       }
 
+      this.savingJob = true
       try {
         const poster = await this.resolvePosterMeta()
         if (!poster) {
@@ -567,19 +631,21 @@ export default {
           createdByCompanyAdminUid: poster.createdByCompanyAdminUid || ""
         })
 
-        toast.success("Job submitted for Finance approval.")
+        toast.success("Job submitted for Finance approval.", true)
 
         // RESET FORM
         Object.keys(this.job).forEach(k => this.job[k] = "")
+        this.job.vacancies = 1
         this.imageFile = null
         this.preview = null
         this.imageFile2 = null
         this.preview2 = null
-        this.showMore = false
 
       } catch (err) {
         console.error(err)
         toast.error("Failed to post job")
+      } finally {
+        this.savingJob = false
       }
     }
   }
@@ -725,6 +791,30 @@ textarea:focus {
 .save:hover {
   background: #1d4ed8;
 }
+
+.save:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: -2px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 </style>
+
 
 

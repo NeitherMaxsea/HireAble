@@ -49,6 +49,27 @@
           <h3>{{ selectedCompany.companyName }}</h3>
           <p>{{ selectedCompany.companyId }}</p>
           <p>{{ selectedCompany.contactEmail }}</p>
+          <div class="company-action-row">
+            <span class="company-status" :class="selectedCompany.isSuspended ? 'suspended' : 'active'">
+              {{ selectedCompany.isSuspended ? "Suspended" : "Active" }}
+            </span>
+            <button
+              type="button"
+              class="company-action-btn suspend"
+              :disabled="companyActionLoading"
+              @click="requestToggleCompanySuspended(selectedCompany, !selectedCompany.isSuspended)"
+            >
+              {{ companyActionLoading ? "Processing..." : (selectedCompany.isSuspended ? "Activate Company" : "Suspend Company") }}
+            </button>
+            <button
+              type="button"
+              class="company-action-btn delete"
+              :disabled="companyActionLoading"
+              @click="requestDeleteCompany(selectedCompany)"
+            >
+              {{ companyActionLoading ? "Processing..." : "Delete Company" }}
+            </button>
+          </div>
         </div>
 
         <div class="count-grid">
@@ -120,13 +141,46 @@
         </div>
       </section>
     </div>
+
+    <div v-if="showCompanyConfirmModal && pendingCompanyAction" class="modal-overlay" @click.self="closeCompanyConfirmModal">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3>{{ pendingCompanyAction.type === "delete" ? "Delete Company" : (pendingCompanyAction.suspend ? "Suspend Company" : "Activate Company") }}</h3>
+          <button class="close-btn" type="button" @click="closeCompanyConfirmModal">x</button>
+        </div>
+        <div class="modal-body">
+          <p v-if="pendingCompanyAction.type === 'delete'">
+            Delete company <strong>{{ pendingCompanyAction.company.companyName }}</strong> and all related users? This cannot be undone.
+          </p>
+          <p v-else>
+            Are you sure you want to {{ pendingCompanyAction.suspend ? "suspend" : "activate" }}
+            company <strong>{{ pendingCompanyAction.company.companyName }}</strong>?
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button class="cancel-btn" type="button" :disabled="companyActionLoading" @click="closeCompanyConfirmModal">Cancel</button>
+          <button
+            class="confirm-btn"
+            :class="pendingCompanyAction.type === 'delete' ? 'delete' : 'suspend'"
+            type="button"
+            :disabled="companyActionLoading"
+            @click="confirmCompanyAction"
+          >
+            {{ companyActionLoading ? "Processing..." : "Confirm" }}
+          </button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
-import { collection, getDocs, onSnapshot, query } from "@/lib/laravel-data"
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, updateDoc } from "@/lib/laravel-data"
 import { db } from "@/lib/client-platform"
+import Toastify from "toastify-js"
+import "toastify-js/src/toastify.css"
+import api from "@/services/api"
 
 const companies = ref([])
 const selectedCompanyId = ref("")
@@ -138,6 +192,9 @@ const selectedDepartment = ref("company_admin")
 const departmentSearch = ref("")
 const DEPARTMENT_PAGE_SIZE = 8
 const departmentVisibleCount = ref(DEPARTMENT_PAGE_SIZE)
+const companyActionLoading = ref(false)
+const showCompanyConfirmModal = ref(false)
+const pendingCompanyAction = ref(null)
 
 const departmentTabs = [
   { key: "company_admin", label: "Company Admin" },
@@ -209,7 +266,13 @@ async function fetchUsersOnce() {
   for (const collectionName of candidates) {
     try {
       const snap = await getDocs(query(collection(db, collectionName)))
-      const list = normalizeUsers(snap.docs.map((docSnap) => docSnap.data()))
+      const list = normalizeUsers(
+        snap.docs.map((docSnap) => ({
+          id: docSnap.id,
+          collectionName,
+          data: docSnap.data(),
+        }))
+      )
       if (list.length) {
         return { list, source: collectionName, error: null }
       }
@@ -228,7 +291,13 @@ function subscribeUsersRealtime(source) {
     const unsub = onSnapshot(
       query(collection(db, collectionName)),
       (snapshot) => {
-        const list = normalizeUsers(snapshot.docs.map((docSnap) => docSnap.data()))
+        const list = normalizeUsers(
+          snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            collectionName,
+            data: docSnap.data(),
+          }))
+        )
         if (list.length || !companies.value.length) {
           setCompanies(list)
           loadError.value = ""
@@ -245,15 +314,17 @@ function subscribeUsersRealtime(source) {
   })
 }
 
-function normalizeUsers(rawUsers) {
-  return rawUsers
-    .map((item, index) => ({
-      id: String(item.uid || item.id || `${item.email || "user"}-${index}`),
-      companyId: String(item.companyId || "").trim(),
-      companyName: String(item.companyName || "").trim(),
-      email: String(item.email || "").trim().toLowerCase(),
-      name: String(item.username || item.name || item.email || "Unknown User").trim(),
-      role: normalizeRole(item.role),
+function normalizeUsers(entries) {
+  return entries
+    .map(({ id, collectionName, data }, index) => ({
+      id: String(id || data?.uid || data?.id || `${data?.email || "user"}-${index}`),
+      collectionName: String(collectionName || "users"),
+      companyId: String(data?.companyId || "").trim(),
+      companyName: String(data?.companyName || "").trim(),
+      email: String(data?.email || "").trim().toLowerCase(),
+      name: String(data?.username || data?.name || data?.email || "Unknown User").trim(),
+      role: normalizeRole(data?.role),
+      status: normalizeStatus(data?.status),
     }))
     .filter((user) => user.companyId && ["company_admin", "hr", "operation", "finance"].includes(user.role))
 }
@@ -276,10 +347,12 @@ function setCompanies(users) {
         companyId: user.companyId,
         companyName: user.companyName || `Company ${user.companyId}`,
         contactEmail: user.email || "-",
+        isSuspended: false,
         companyAdminCount: 0,
         hrCount: 0,
         operationCount: 0,
         financeCount: 0,
+        allMembers: [],
         departmentMembers: {
           company_admin: [],
           hr: [],
@@ -295,6 +368,7 @@ function setCompanies(users) {
     if (!record.contactEmail || record.contactEmail === "-") {
       record.contactEmail = user.email || "-"
     }
+    record.allMembers.push(user)
 
     if (record.departmentMembers[user.role]) {
       record.departmentMembers[user.role].push(user)
@@ -310,6 +384,12 @@ function setCompanies(users) {
     } else if (user.role === "finance") {
       record.financeCount += 1
     }
+  })
+
+  companyMap.forEach((record) => {
+    const totalMembers = record.allMembers.length
+    const suspendedCount = record.allMembers.filter((member) => member.status === "suspended").length
+    record.isSuspended = totalMembers > 0 && suspendedCount === totalMembers
   })
 
   const next = Array.from(companyMap.values()).sort((a, b) =>
@@ -345,6 +425,219 @@ function formatRoleLabel(role) {
   if (role === "operation") return "Operation"
   if (role === "finance") return "Finance"
   return "User"
+}
+
+function normalizeStatus(value) {
+  const status = String(value || "").trim().toLowerCase()
+  return status || "inactive"
+}
+
+function notify(text, color = "#16a34a", duration = 2000) {
+  Toastify({
+    text,
+    backgroundColor: color,
+    duration,
+    className: "toast-no-timer",
+    gravity: "top",
+    position: "right",
+    close: false,
+    style: { "--toast-duration": `${duration}ms` },
+  }).showToast()
+}
+
+async function toggleCompanySuspended(company, suspend) {
+  if (!company || !Array.isArray(company.allMembers) || !company.allMembers.length) return
+
+  companyActionLoading.value = true
+  const nextStatus = suspend ? "suspended" : "active"
+  const failed = []
+
+  try {
+    for (const member of company.allMembers) {
+      try {
+        await updateDoc(doc(db, member.collectionName || "users", member.id), {
+          status: nextStatus,
+          isActive: !suspend,
+          updatedAt: serverTimestamp(),
+        })
+      } catch {
+        const altCollection = (member.collectionName || "users") === "users" ? "Users" : "users"
+        try {
+          await updateDoc(doc(db, altCollection, member.id), {
+            status: nextStatus,
+            isActive: !suspend,
+            updatedAt: serverTimestamp(),
+          })
+        } catch {
+          failed.push(member.id)
+        }
+      }
+    }
+
+    if (failed.length > 0) {
+      notify(`Some accounts failed to update (${failed.length}).`, "#dc2626", 2000)
+    } else {
+      notify(suspend ? "Company suspended successfully." : "Company activated successfully.", "#16a34a", 2000)
+    }
+  } finally {
+    companyActionLoading.value = false
+  }
+}
+
+async function deleteCompany(company) {
+  if (!company || !Array.isArray(company.allMembers) || !company.allMembers.length) return
+
+  companyActionLoading.value = true
+  const failed = []
+
+  try {
+    const backendDeleteFailures = await purgeCompanyBackendData(company)
+
+    for (const member of company.allMembers) {
+      try {
+        await deleteDoc(doc(db, member.collectionName || "users", member.id))
+      } catch {
+        const altCollection = (member.collectionName || "users") === "users" ? "Users" : "users"
+        try {
+          await deleteDoc(doc(db, altCollection, member.id))
+        } catch {
+          failed.push(member.id)
+        }
+      }
+    }
+
+    const totalFailures = failed.length + backendDeleteFailures
+    if (totalFailures > 0) {
+      notify(`Some related records failed to delete (${totalFailures}).`, "#dc2626")
+    } else {
+      notify("Company deleted successfully.", "#dc2626")
+      selectedCompanyId.value = ""
+    }
+  } finally {
+    companyActionLoading.value = false
+  }
+}
+
+async function purgeCompanyBackendData(company) {
+  let failures = 0
+  const safeCompanyId = String(company?.companyId || "").trim()
+  if (!safeCompanyId) return failures
+
+  const companyMembers = Array.isArray(company?.allMembers) ? company.allMembers : []
+  const memberUidSet = new Set(
+    companyMembers
+      .map((member) => String(member?.id || "").trim())
+      .filter(Boolean)
+  )
+  const memberEmailSet = new Set(
+    companyMembers
+      .map((member) => String(member?.email || "").trim().toLowerCase())
+      .filter(Boolean)
+  )
+
+  async function fetchList(path, params = {}) {
+    try {
+      const res = await api.get(path, { params })
+      return Array.isArray(res?.data) ? res.data : []
+    } catch {
+      return []
+    }
+  }
+
+  async function deleteById(path, rawId) {
+    const id = String(rawId || "").trim()
+    if (!id) return
+    try {
+      await api.delete(`${path}/${id}`)
+    } catch (error) {
+      const status = Number(error?.response?.status || 0)
+      if (status !== 404) {
+        failures += 1
+      }
+    }
+  }
+
+  const users = await fetchList("/users", { companyId: safeCompanyId })
+
+  let jobs = await fetchList("/jobs", { companyId: safeCompanyId })
+  if (!jobs.length) {
+    const allJobs = await fetchList("/jobs")
+    jobs = allJobs.filter((row) => String(row?.companyId || "").trim() === safeCompanyId)
+  }
+  const jobIdSet = new Set(jobs.map((row) => String(row?.id || "").trim()).filter(Boolean))
+
+  let applications = await fetchList("/applications", { companyId: safeCompanyId })
+  if (!applications.length && jobIdSet.size > 0) {
+    const allApplications = await fetchList("/applications")
+    applications = allApplications.filter((row) => jobIdSet.has(String(row?.jobId || "").trim()))
+  }
+  const applicationIdSet = new Set(applications.map((row) => String(row?.id || "").trim()).filter(Boolean))
+
+  let schedules = await fetchList("/interview-schedules", { companyId: safeCompanyId })
+  if (!schedules.length) {
+    const allSchedules = await fetchList("/interview-schedules")
+    schedules = allSchedules.filter((row) => {
+      const rowCompanyId = String(row?.companyId || "").trim()
+      const rowCreator = String(row?.createdByUid || "").trim()
+      const rowApplicantEmail = String(row?.applicantEmail || "").trim().toLowerCase()
+      const rowApplicationId = String(row?.applicationId || "").trim()
+      return (
+        rowCompanyId === safeCompanyId ||
+        memberUidSet.has(rowCreator) ||
+        memberEmailSet.has(rowApplicantEmail) ||
+        applicationIdSet.has(rowApplicationId)
+      )
+    })
+  }
+
+  for (const row of schedules) {
+    await deleteById("/interview-schedules", row?.id)
+  }
+
+  for (const row of applications) {
+    await deleteById("/applications", row?.id)
+  }
+
+  for (const row of jobs) {
+    await deleteById("/jobs", row?.id)
+  }
+
+  for (const row of users) {
+    await deleteById("/users", row?.id)
+  }
+
+  return failures
+}
+
+function requestToggleCompanySuspended(company, suspend) {
+  if (!company) return
+  pendingCompanyAction.value = { type: "suspend", suspend, company }
+  showCompanyConfirmModal.value = true
+}
+
+function requestDeleteCompany(company) {
+  if (!company) return
+  pendingCompanyAction.value = { type: "delete", company }
+  showCompanyConfirmModal.value = true
+}
+
+function closeCompanyConfirmModal() {
+  if (companyActionLoading.value) return
+  showCompanyConfirmModal.value = false
+  pendingCompanyAction.value = null
+}
+
+async function confirmCompanyAction() {
+  const action = pendingCompanyAction.value
+  if (!action?.company) return
+
+  if (action.type === "delete") {
+    await deleteCompany(action.company)
+  } else {
+    await toggleCompanySuspended(action.company, Boolean(action.suspend))
+  }
+
+  closeCompanyConfirmModal()
 }
 </script>
 
@@ -455,6 +748,141 @@ function formatRoleLabel(role) {
   margin: 4px 0;
   color: #0f766e;
   font-size: 13px;
+}
+
+.company-action-row {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.company-status {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.company-status.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.company-status.suspended {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.company-action-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.company-action-btn.suspend {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.company-action-btn.delete {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.company-action-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 120;
+  padding: 16px;
+}
+
+.modal-card {
+  width: min(460px, 100%);
+  background: #fff;
+  border: 1px solid #d8ece9;
+  border-radius: 12px;
+  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.25);
+}
+
+.modal-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.close-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: #f1f5f9;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 14px 16px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.modal-actions {
+  padding: 0 16px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel-btn,
+.confirm-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background: #e2e8f0;
+  color: #1f2937;
+}
+
+.confirm-btn.suspend {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.confirm-btn.delete {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.cancel-btn:disabled,
+.confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .count-grid {

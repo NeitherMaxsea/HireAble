@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
+use App\Models\ApplicantProfile;
 use App\Models\User;
 use App\Services\PhpMailerService;
 use Illuminate\Http\JsonResponse;
@@ -25,11 +26,15 @@ class AuthController extends Controller
     {
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'username' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email', 'unique:admins,email'],
             'password' => ['required', 'string', 'min:8'],
             'role' => ['nullable', 'string', 'max:50'],
             'contact' => ['nullable', 'string', 'max:100'],
             'disability' => ['nullable', 'string', 'max:255'],
+            'photoURL' => ['nullable', 'string', 'max:5000'],
+            'photoPath' => ['nullable', 'string', 'max:5000'],
+            'onboardingData' => ['nullable', 'array'],
             'companyId' => ['nullable', 'string', 'max:100'],
             'companyName' => ['nullable', 'string', 'max:255'],
             'companyAddress' => ['nullable', 'string', 'max:255'],
@@ -50,6 +55,7 @@ class AuthController extends Controller
 
         $isCompanyAdmin = $normalizedRole === 'company_admin';
         $email = strtolower(trim((string) $payload['email']));
+        $username = trim((string) ($payload['username'] ?? '')) ?: trim((string) $payload['name']);
         $companyName = isset($payload['companyName']) ? trim((string) $payload['companyName']) : null;
         $companyId = isset($payload['companyId']) ? trim((string) $payload['companyId']) : null;
         if ($isCompanyAdmin && !$companyId) {
@@ -59,18 +65,21 @@ class AuthController extends Controller
         if ($this->shouldBypassOtpForTestEmail($email)) {
             $existing = User::where('email', $email)->first();
             if (!$existing) {
+                $requiresAdminReview = in_array($normalizedRole, ['applicant', 'company_admin'], true);
                 $companyLoginCode = $isCompanyAdmin ? (string) random_int(100000, 999999) : null;
 
                 $created = User::create([
                     'name' => (string) $payload['name'],
-                    'username' => (string) $payload['name'],
+                    'username' => $username,
                     'email' => $email,
                     'password' => Hash::make((string) $payload['password']),
                     'role' => $normalizedRole ?: 'applicant',
-                    'status' => 'active',
-                    'is_active' => true,
+                    'status' => $requiresAdminReview ? 'pending_review' : 'active',
+                    'is_active' => $requiresAdminReview ? false : true,
                     'contact' => $payload['contact'] ?? null,
                     'disability' => $payload['disability'] ?? null,
+                    'photo_url' => $payload['photoURL'] ?? null,
+                    'photo_path' => $payload['photoPath'] ?? null,
                     'company_id' => $companyId,
                     'company_name' => $companyName,
                     'company_address' => $payload['companyAddress'] ?? null,
@@ -78,16 +87,23 @@ class AuthController extends Controller
                     'company_login_code' => $isCompanyAdmin ? Hash::make((string) $companyLoginCode) : null,
                     'position' => $payload['position'] ?? null,
                     'department' => $payload['department'] ?? null,
-                    'profile_completed' => $normalizedRole !== 'applicant',
-                    'last_login_at' => now(),
+                    'profile_completed' => $normalizedRole !== 'applicant'
+                        ? true
+                        : !empty($payload['onboardingData']),
+                    'onboarding_data' => $payload['onboardingData'] ?? null,
+                    'last_login_at' => $requiresAdminReview ? null : now(),
                 ]);
+
+                if ($normalizedRole === 'applicant') {
+                    $this->upsertApplicantProfileFromOnboardingData($created, is_array($payload['onboardingData'] ?? null) ? $payload['onboardingData'] : null);
+                }
 
                 if ($isCompanyAdmin && $companyLoginCode) {
                     try {
                         $this->mailer->sendPlainText(
                             $created->email,
-                            'PWD Portal Company Account Created',
-                            "Your company admin account has been created successfully.\n\nYour company admin verification code is: {$companyLoginCode}\n\nUse this code together with your email and password when logging in.\nNo OTP will be sent during login."
+                            'PWD Portal Company Account Received',
+                            "Your company admin registration has been received and is now under review.\n\nYour company admin verification code is: {$companyLoginCode}\n\nKeep this code. You will use it together with your email and password once your account is approved.\nNo OTP will be sent during login."
                         );
                     } catch (\Throwable $e) {
                         Log::warning('Company registration notice email failed (test bypass)', [
@@ -108,24 +124,41 @@ class AuthController extends Controller
             ], 201);
         }
 
+        $pendingRegistrationData = [
+            'name' => $payload['name'],
+            'password' => Hash::make((string) $payload['password']),
+            'role' => $normalizedRole,
+            'contact' => $payload['contact'] ?? null,
+            'disability' => $payload['disability'] ?? null,
+            'company_id' => $companyId,
+            'company_name' => $companyName,
+            'company_address' => $payload['companyAddress'] ?? null,
+            'company_industry' => $payload['companyIndustry'] ?? null,
+            'position' => $payload['position'] ?? null,
+            'department' => $payload['department'] ?? null,
+            'expires_at' => now()->addMinutes(30),
+            'updated_at' => now(),
+            'created_at' => now(),
+        ];
+
+        if (Schema::hasColumn('pending_registrations', 'username')) {
+            $pendingRegistrationData['username'] = $username;
+        }
+        if (Schema::hasColumn('pending_registrations', 'photo_url')) {
+            $pendingRegistrationData['photo_url'] = $payload['photoURL'] ?? null;
+        }
+        if (Schema::hasColumn('pending_registrations', 'photo_path')) {
+            $pendingRegistrationData['photo_path'] = $payload['photoPath'] ?? null;
+        }
+        if (Schema::hasColumn('pending_registrations', 'onboarding_data')) {
+            $pendingRegistrationData['onboarding_data'] = isset($payload['onboardingData'])
+                ? json_encode($payload['onboardingData'])
+                : null;
+        }
+
         DB::table('pending_registrations')->updateOrInsert(
             ['email' => $email],
-            [
-                'name' => $payload['name'],
-                'password' => Hash::make((string) $payload['password']),
-                'role' => $normalizedRole,
-                'contact' => $payload['contact'] ?? null,
-                'disability' => $payload['disability'] ?? null,
-                'company_id' => $companyId,
-                'company_name' => $companyName,
-                'company_address' => $payload['companyAddress'] ?? null,
-                'company_industry' => $payload['companyIndustry'] ?? null,
-                'position' => $payload['position'] ?? null,
-                'department' => $payload['department'] ?? null,
-                'expires_at' => now()->addMinutes(30),
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
+            $pendingRegistrationData
         );
 
         $otpSent = true;
@@ -167,6 +200,7 @@ class AuthController extends Controller
             if (!Hash::check($payload['password'], (string) $admin->password)) {
                 return response()->json(['message' => 'Invalid credentials'], 401);
             }
+            $isFirstLogin = empty($admin->last_login_at);
 
             $status = strtolower((string) ($admin->status ?? ''));
             if ($status === 'suspended') {
@@ -201,13 +235,20 @@ class AuthController extends Controller
 
             return response()->json([
                 'message' => 'Login successful',
-                'user' => $this->mapUser($admin),
+                'user' => $this->mapUser($admin, $isFirstLogin),
                 'sessionKey' => $sessionKey,
             ]);
         }
 
         $user = $this->findUserByLogin($loginValue);
-        if (!$user || !Hash::check($payload['password'], (string) $user->password)) {
+        if (!$user) {
+            $pendingMessage = $this->getPendingRegistrationLoginMessage($loginValue);
+            if ($pendingMessage !== null) {
+                return response()->json(['message' => $pendingMessage], 403);
+            }
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+        if (!Hash::check($payload['password'], (string) $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
@@ -217,19 +258,48 @@ class AuthController extends Controller
                 'message' => 'Your account has been suspended. Please ask your boss.',
             ], 403);
         }
+        if ($status === 'pending_review') {
+            return response()->json([
+                'message' => 'Your account is under review. Please wait for the approval email.',
+            ], 403);
+        }
+        if ($status === 'rejected') {
+            $reason = trim((string) ($user->review_rejection_reason ?? ''));
+            return response()->json([
+                'message' => $reason !== ''
+                    ? "Your registration was rejected: {$reason}"
+                    : 'Your registration was rejected. Please check your email for details.',
+            ], 403);
+        }
 
         $role = strtolower((string) ($user->role ?? ''));
         if ($role === 'company_admin') {
+            /*
             $verificationCode = (string) ($payload['verificationCode'] ?? '');
             if ($verificationCode === '') {
+                try {
+                    $this->issueOtpForEmail($user->email, 'company_admin', 'company_admin_login');
+                } catch (\Throwable $e) {
+                    Log::warning('Company admin login OTP send failed', [
+                        'email' => $user->email,
+                        'error' => $e->getMessage(),
+                    ]);
+                    return response()->json([
+                        'message' => 'Failed to send company admin OTP. Please try again.',
+                    ], 500);
+                }
                 return response()->json([
-                    'message' => 'Company admin verification required',
+                    'message' => 'Company admin verification required. OTP sent to your email.',
                     'requiresCompanyAdminVerification' => true,
+                    'otpSent' => true,
                 ]);
             }
-            if (!Hash::check($verificationCode, (string) ($user->company_login_code ?? ''))) {
+            $otpVerified = $this->consumeOtpForEmail($user->email, $verificationCode, 'company_admin_login');
+            $legacyCodeVerified = Hash::check($verificationCode, (string) ($user->company_login_code ?? ''));
+            if (!$otpVerified && !$legacyCodeVerified) {
                 return response()->json(['message' => 'Invalid company admin verification code'], 401);
             }
+            */
         }
 
         $sessionKey = trim((string) ($payload['sessionKey'] ?? ''));
@@ -249,6 +319,7 @@ class AuthController extends Controller
             $user->session_last_seen_at = null;
         }
 
+        $isFirstLogin = empty($user->last_login_at);
         $user->last_login_at = now();
         $user->status = 'active';
         $user->is_active = true;
@@ -258,7 +329,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Login successful',
-            'user' => $this->mapUser($user),
+            'user' => $this->mapUser($user, $isFirstLogin),
             'sessionKey' => $sessionKey,
         ]);
     }
@@ -322,7 +393,8 @@ class AuthController extends Controller
             $account->active_session_key = null;
             $account->session_last_seen_at = null;
             $account->is_active = false;
-            if (strtolower((string) ($account->status ?? '')) !== 'suspended') {
+            $currentStatus = strtolower((string) ($account->status ?? ''));
+            if (!in_array($currentStatus, ['suspended', 'pending_review', 'rejected'], true)) {
                 $account->status = 'inactive';
             }
             $account->last_logout_at = now();
@@ -411,18 +483,33 @@ class AuthController extends Controller
             $existing = User::where('email', $email)->first();
             if (!$existing) {
                 $isCompanyAdmin = $pendingRole === 'company_admin';
+                $requiresAdminReview = in_array($pendingRole, ['applicant', 'company_admin'], true);
                 $companyLoginCode = $isCompanyAdmin ? (string) random_int(100000, 999999) : null;
+                $pendingOnboardingData = null;
+                $pendingOnboardingJson = property_exists($pending, 'onboarding_data') ? $pending->onboarding_data : null;
+                if (!empty($pendingOnboardingJson)) {
+                    try {
+                        $decoded = json_decode((string) $pendingOnboardingJson, true, 512, JSON_THROW_ON_ERROR);
+                        if (is_array($decoded)) {
+                            $pendingOnboardingData = $decoded;
+                        }
+                    } catch (\Throwable) {
+                        $pendingOnboardingData = null;
+                    }
+                }
 
                 $created = User::create([
                     'name' => (string) $pending->name,
-                    'username' => (string) $pending->name,
+                    'username' => (string) ((property_exists($pending, 'username') ? $pending->username : null) ?: $pending->name),
                     'email' => $email,
                     'password' => (string) $pending->password,
                     'role' => $pendingRole ?: 'applicant',
-                    'status' => 'active',
-                    'is_active' => true,
+                    'status' => $requiresAdminReview ? 'pending_review' : 'active',
+                    'is_active' => $requiresAdminReview ? false : true,
                     'contact' => $pending->contact,
                     'disability' => $pending->disability,
+                    'photo_url' => property_exists($pending, 'photo_url') ? $pending->photo_url : null,
+                    'photo_path' => property_exists($pending, 'photo_path') ? $pending->photo_path : null,
                     'company_id' => $pending->company_id,
                     'company_name' => $pending->company_name,
                     'company_address' => $pending->company_address,
@@ -430,19 +517,39 @@ class AuthController extends Controller
                     'company_login_code' => $isCompanyAdmin ? Hash::make((string) $companyLoginCode) : null,
                     'position' => $pending->position,
                     'department' => $pending->department,
-                    'profile_completed' => $pendingRole !== 'applicant',
-                    'last_login_at' => now(),
+                    'profile_completed' => $pendingRole !== 'applicant'
+                        ? true
+                        : !empty($pendingOnboardingData),
+                    'onboarding_data' => $pendingOnboardingData,
+                    'last_login_at' => $requiresAdminReview ? null : now(),
                 ]);
+
+                if ($pendingRole === 'applicant') {
+                    $this->upsertApplicantProfileFromOnboardingData($created, $pendingOnboardingData);
+                }
 
                 if ($isCompanyAdmin) {
                     try {
                         $this->mailer->sendPlainText(
                             $created->email,
-                            'PWD Portal Company Account Created',
-                            "Your company admin account has been created successfully.\n\nYour company admin verification code is: {$companyLoginCode}\n\nUse this code together with your email and password when logging in.\nNo OTP will be sent during login."
+                            'PWD Portal Company Account Received',
+                            "Your company admin registration has been received and is now under review.\n\nYour company admin verification code is: {$companyLoginCode}\n\nKeep this code. You will use it together with your email and password once your account is approved.\nNo OTP will be sent during login."
                         );
                     } catch (\Throwable $e) {
                         Log::warning('Company registration notice email failed', [
+                            'email' => $created->email,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                } elseif ($pendingRole === 'applicant') {
+                    try {
+                        $this->mailer->sendPlainText(
+                            $created->email,
+                            'PWD Portal Applicant Account Received',
+                            "Your applicant registration has been received and is now under review.\n\nYou cannot log in yet. We will email you once your account has been approved or if we need corrections."
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning('Applicant registration notice email failed', [
                             'email' => $created->email,
                             'error' => $e->getMessage(),
                         ]);
@@ -513,7 +620,7 @@ class AuthController extends Controller
         return response()->json(['message' => 'Password reset successful']);
     }
 
-    private function mapUser(User|Admin $user): array
+    private function mapUser(User|Admin $user, ?bool $isFirstLogin = null): array
     {
         $isAdmin = $user instanceof Admin;
 
@@ -532,6 +639,7 @@ class AuthController extends Controller
             'position' => $isAdmin ? null : $user->position,
             'department' => $isAdmin ? null : $user->department,
             'profileCompleted' => $isAdmin ? true : (bool) ($user->profile_completed ?? false),
+            'isFirstLogin' => $isFirstLogin ?? empty($user->last_login_at),
             'hasActiveSession' => !empty($user->active_session_key),
             'sessionLastSeenAt' => $user->session_last_seen_at,
             'accountType' => $isAdmin ? 'admins' : 'users',
@@ -607,6 +715,33 @@ class AuthController extends Controller
         }
     }
 
+    private function getPendingRegistrationLoginMessage(string $loginValue): ?string
+    {
+        $query = DB::table('pending_registrations')->orderByDesc('id');
+
+        if (Schema::hasColumn('pending_registrations', 'username')) {
+            $query->where(function ($builder) use ($loginValue) {
+                $builder
+                    ->whereRaw('LOWER(email) = ?', [$loginValue])
+                    ->orWhereRaw('LOWER(username) = ?', [$loginValue]);
+            });
+        } else {
+            $query->whereRaw('LOWER(email) = ?', [$loginValue]);
+        }
+
+        $pending = $query->first();
+        if (!$pending) {
+            return null;
+        }
+
+        $expiresAtRaw = (string) ($pending->expires_at ?? '');
+        if ($expiresAtRaw !== '' && now()->greaterThan($expiresAtRaw)) {
+            return 'Registration session expired. Please register again and verify OTP.';
+        }
+
+        return 'Your registration is still pending OTP verification. Please verify your OTP first.';
+    }
+
     private function resolveAccountForSession(string $uid, ?string $accountType, string $sessionKey): User|Admin|null
     {
         $normalizedType = strtolower(trim((string) ($accountType ?? '')));
@@ -640,7 +775,7 @@ class AuthController extends Controller
         return hash_equals($currentSessionKey, $sessionKey);
     }
 
-    private function issueOtpForEmail(string $email, string $role): void
+    private function issueOtpForEmail(string $email, string $role, string $purpose = 'auth'): void
     {
         $otp = (string) random_int(100000, 999999);
         $recipientLabel = 'Applicant';
@@ -653,7 +788,7 @@ class AuthController extends Controller
         DB::table('otp_codes')->insert([
             'email' => $email,
             'otp_code' => Hash::make($otp),
-            'purpose' => 'auth',
+            'purpose' => $purpose,
             'expires_at' => now()->addMinutes(10),
             'verified_at' => null,
             'created_at' => now(),
@@ -661,6 +796,30 @@ class AuthController extends Controller
         ]);
 
         $this->mailer->sendOtpEmail($email, $otp, $recipientLabel);
+    }
+
+    private function consumeOtpForEmail(string $email, string $otp, string $purpose = 'auth'): bool
+    {
+        $record = DB::table('otp_codes')
+            ->where('email', strtolower(trim($email)))
+            ->where('purpose', $purpose)
+            ->whereNull('verified_at')
+            ->where('expires_at', '>', now())
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$record || !Hash::check((string) $otp, (string) $record->otp_code)) {
+            return false;
+        }
+
+        DB::table('otp_codes')
+            ->where('id', $record->id)
+            ->update([
+                'verified_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        return true;
     }
 
     private function shouldBypassOtpForTestEmail(string $email): bool
@@ -674,5 +833,55 @@ class AuthController extends Controller
         return str_contains($normalized, '@test.local')
             || str_contains($normalized, '@example.com')
             || str_contains($normalized, '+test@');
+    }
+
+    private function upsertApplicantProfileFromOnboardingData(User $user, ?array $data): void
+    {
+        if (!$user || strtolower((string) ($user->role ?? '')) !== 'applicant') {
+            return;
+        }
+
+        $payload = is_array($data) ? $data : [];
+        if (empty($payload) && !Schema::hasTable('applicant_profiles')) {
+            return;
+        }
+        if (!Schema::hasTable('applicant_profiles')) {
+            return;
+        }
+
+        $preferredSkills = $payload['preferredSkills'] ?? $payload['preferred_skills'] ?? null;
+        if (!is_array($preferredSkills)) {
+            $preferredSkills = null;
+        }
+
+        ApplicantProfile::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'first_name' => $payload['firstName'] ?? $payload['first_name'] ?? null,
+                'last_name' => $payload['lastName'] ?? $payload['last_name'] ?? null,
+                'sex_at_birth' => $payload['sexAtBirth'] ?? $payload['sex_at_birth'] ?? null,
+                'birth_date' => $payload['birthDate'] ?? $payload['birth_date'] ?? null,
+                'academic_level' => $payload['academicLevel'] ?? $payload['academic_level'] ?? null,
+                'address_province' => $payload['addressProvince'] ?? $payload['address_province'] ?? null,
+                'address_city' => $payload['addressCity'] ?? $payload['address_city'] ?? null,
+                'mobile_number' => $payload['mobileNumber'] ?? $payload['mobile_number'] ?? $user->contact,
+                'pwd_category' => $payload['pwdCategory'] ?? $payload['pwd_category'] ?? $user->disability,
+                'pwd_id_number' => $payload['pwdIdNumber'] ?? $payload['pwd_id_number'] ?? null,
+                'preferred_role' => $payload['preferredRole'] ?? $payload['preferred_role'] ?? null,
+                'preferred_skills' => $preferredSkills,
+                'years_experience' => $payload['yearsExperience'] ?? $payload['years_experience'] ?? null,
+                'preferred_province' => $payload['preferredProvince'] ?? $payload['preferred_province'] ?? null,
+                'preferred_city' => $payload['preferredCity'] ?? $payload['preferred_city'] ?? null,
+                'work_mode' => $payload['workMode'] ?? $payload['work_mode'] ?? null,
+                'salary_min' => $payload['salaryMin'] ?? $payload['salary_min'] ?? null,
+                'salary_max' => $payload['salaryMax'] ?? $payload['salary_max'] ?? null,
+                'profile_summary' => $payload['profileSummary'] ?? $payload['profile_summary'] ?? null,
+                'profile_picture_url' => $payload['profilePictureUrl'] ?? $payload['profile_picture_url'] ?? $user->photo_url,
+                'profile_picture_path' => $payload['profilePicturePath'] ?? $payload['profile_picture_path'] ?? $user->photo_path,
+                'pwd_id_image_url' => $payload['pwdIdImageUrl'] ?? $payload['pwd_id_image_url'] ?? null,
+                'pwd_id_image_path' => $payload['pwdIdImagePath'] ?? $payload['pwd_id_image_path'] ?? null,
+                'raw_payload' => $payload ?: null,
+            ]
+        );
     }
 }

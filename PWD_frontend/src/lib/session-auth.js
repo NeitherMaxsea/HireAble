@@ -3,7 +3,12 @@ import api from "@/services/api"
 const listeners = new Set()
 
 function readCurrentUser() {
-  const uid = String(localStorage.getItem("uid") || localStorage.getItem("userUid") || "").trim()
+  const uid = String(
+    localStorage.getItem("uid") ||
+    localStorage.getItem("userUid") ||
+    localStorage.getItem("sessionUid") ||
+    ""
+  ).trim()
   const email = String(localStorage.getItem("userEmail") || "").trim()
   const accountType = String(localStorage.getItem("userCollection") || "users").trim().toLowerCase() === "admins"
     ? "admins"
@@ -60,13 +65,19 @@ function clearLocalSession() {
     "activeSessionId",
     "sessionUid",
     "userCollection",
+    "userIsFirstLogin",
   ]
   keys.forEach((key) => localStorage.removeItem(key))
   auth.currentUser = null
 }
 
 async function releaseServerSessionLock() {
-  const uid = String(localStorage.getItem("uid") || localStorage.getItem("userUid") || "").trim()
+  const uid = String(
+    localStorage.getItem("uid") ||
+    localStorage.getItem("userUid") ||
+    localStorage.getItem("sessionUid") ||
+    ""
+  ).trim()
   const sessionKey = String(localStorage.getItem("activeSessionId") || "").trim()
   const accountType = String(localStorage.getItem("userCollection") || "users").trim().toLowerCase() === "admins"
     ? "admins"

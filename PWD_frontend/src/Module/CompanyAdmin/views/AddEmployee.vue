@@ -59,28 +59,6 @@
       <button class="create-btn" :disabled="saving || !canCreate" @click="createEmployee">
         {{ saving ? "Creating..." : "Create Employee Account" }}
       </button>
-
-      <div v-if="lastCreated" class="created-card">
-        <h4>Account Created</h4>
-        <div class="created-grid">
-          <div class="created-item">
-            <span>Username</span>
-            <strong>{{ lastCreated.username }}</strong>
-          </div>
-          <div class="created-item">
-            <span>Email</span>
-            <strong>{{ lastCreated.email }}</strong>
-          </div>
-          <div class="created-item">
-            <span>Role</span>
-            <strong>{{ lastCreated.role }}</strong>
-          </div>
-          <div class="created-item">
-            <span>Password</span>
-            <strong>{{ lastCreated.password }}</strong>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div class="table-card">
@@ -246,7 +224,6 @@ const form = ref({
   role: "hr",
   tempPassword: ""
 })
-const lastCreated = ref(null)
 const passwordCache = ref(readPasswordCache())
 
 const canCreate = computed(() => {
@@ -411,12 +388,6 @@ async function createEmployee() {
       `${createdEmployee.username} (${formatRoleLabel(createdEmployee.role)}) account created by company admin`
     )
 
-    lastCreated.value = {
-      username: createdEmployee.username,
-      email: createdEmployee.email,
-      role: formatRoleLabel(createdEmployee.role),
-      password: tempPassword
-    }
     passwordCache.value = {
       ...passwordCache.value,
       [createdEmployee.email]: tempPassword
@@ -885,45 +856,6 @@ select {
   padding: 10px 14px;
   cursor: pointer;
   font-weight: 700;
-}
-
-.created-card {
-  margin-top: 14px;
-  border: 1px solid #bbf7d0;
-  background: #f0fdf4;
-  border-radius: 12px;
-  padding: 12px;
-}
-
-.created-card h4 {
-  margin: 0 0 10px;
-  color: #166534;
-  font-size: 14px;
-}
-
-.created-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 8px;
-}
-
-.created-item {
-  background: #ffffff;
-  border: 1px solid #dcfce7;
-  border-radius: 10px;
-  padding: 8px 10px;
-}
-
-.created-item span {
-  display: block;
-  color: #64748b;
-  font-size: 11px;
-}
-
-.created-item strong {
-  color: #0f172a;
-  font-size: 13px;
-  word-break: break-word;
 }
 
 .table-head {

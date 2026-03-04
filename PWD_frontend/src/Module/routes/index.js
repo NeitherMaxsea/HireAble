@@ -11,11 +11,13 @@ import ResetPassword from "@/Module/Authentication/reset-password-pages.vue"
 // LANDING PAGE
 import LandingPage from "@/Landingpage.vue"
 import SearchJobsPage from "@/SearchJobsPage.vue"
+import AboutUsPage from "@/AboutUsPage.vue"
 
 // ADMIN
 import AdminLayout from "@/Module/Admin/layout/adminlayout.vue"
 import AdminDashboard from "@/Module/Admin/views/Dashboard.vue"
 import AdminUsers from "@/Module/Admin/views/Users.vue"
+import AdminAccountApproval from "@/Module/Admin/views/AccountApproval.vue"
 import AdminCompanyManagement from "@/Module/Admin/views/CompanyManagement.vue"
 import AdminLogs from "@/Module/Admin/views/Logs.vue"
 
@@ -25,6 +27,7 @@ import EmployerDashboard from "@/Module/Employer/views/HR/dashboard.vue"
 import Applicant from "@/Module/Employer/views/HR/Applicant.vue"
 import ApplicationStatusTracking from "@/Module/Employer/views/HR/ApplicationStatusTracking.vue"
 import InterviewManagement from "@/Module/Employer/views/HR/InterviewManagement.vue"
+import InterviewScheduleStatus from "@/Module/Employer/views/HR/InterviewScheduleStatus.vue"
 import AddEmployee from "@/Module/Employer/views/HR/AddEmployee.vue"
 import EmployeeRecord from "@/Module/Employer/views/HR/EmployeeRecord.vue"
 import EmployerProfile from "@/Module/Employer/views/HR/Profile.vue"
@@ -56,8 +59,10 @@ import CompanyAdminLogs from "@/Module/CompanyAdmin/views/Logs.vue"
 // APPLICANT
 import ApplicantLayout from "@/Module/Applicant/views/layout/ApplicantLayout.vue"
 import ApplicantDashboard from "@/Module/Applicant/views/job_list.vue"
+import ApplicantApplications from "@/Module/Applicant/views/applications.vue"
 import ApplicantTrainingProgress from "@/Module/Applicant/views/training_progress.vue"
-import ApplicantOnboarding from "@/Module/Applicant/views/onboarding.vue"
+import ApplicantMessages from "@/Module/Applicant/views/messages.vue"
+import ApplicantInterviews from "@/Module/Applicant/views/interviews.vue"
 
 // Auth helper function
 function isUserAuthenticated() {
@@ -85,7 +90,16 @@ function normalizeAuthRole(role) {
   const value = String(role || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
   if (value === "hr_department") return "hr"
   if (value === "operation_department") return "operation"
-  if (value === "financial_department" || value === "finance_department") return "finance"
+  if (
+    value === "financial_department" ||
+    value === "finance_department" ||
+    value === "financial" ||
+    value === "finance" ||
+    value === "finance_staff" ||
+    value === "finance_officer" ||
+    value === "financial_officer" ||
+    value === "accounting"
+  ) return "finance"
   if (value === "company_admin" || value === "companyadmin") return "company_admin"
   return value
 }
@@ -143,6 +157,12 @@ const routes = [
     name: "SearchJobs",
     component: SearchJobsPage,
     meta: { title: "PWD Job Portal | Search Jobs", requiresAuth: false },
+  },
+  {
+    path: "/about-us",
+    name: "AboutUs",
+    component: AboutUsPage,
+    meta: { title: "PWD Job Portal | About Us", requiresAuth: false },
   },
   {
     path: "/find-jobs",
@@ -214,6 +234,16 @@ const routes = [
         },
       },
       {
+        path: "account-approval",
+        name: "AdminAccountApproval",
+        component: AdminAccountApproval,
+        meta: {
+          title: "PWD Job Portal | Account Approval",
+          requiresAuth: true,
+          requiredRole: "admin",
+        },
+      },
+      {
         path: "company-management",
         name: "AdminCompanyManagement",
         component: AdminCompanyManagement,
@@ -274,10 +304,24 @@ const routes = [
       },
       {
         path: "interview-management",
+        redirect: "/employer/HR/interview-management/scheduling",
+      },
+      {
+        path: "interview-management/scheduling",
         name: "InterviewManagement",
         component: InterviewManagement,
         meta: {
-          title: "PWD Job Portal | Interview Management",
+          title: "PWD Job Portal | Interview Scheduling",
+          requiresAuth: true,
+          requiredRole: "employer",
+        },
+      },
+      {
+        path: "interview-management/schedule-status",
+        name: "InterviewScheduleStatus",
+        component: InterviewScheduleStatus,
+        meta: {
+          title: "PWD Job Portal | Interview Schedule Status",
           requiresAuth: true,
           requiredRole: "employer",
         },
@@ -492,17 +536,6 @@ const routes = [
 
   // ================= COMPANY ADMIN =================
   {
-    path: "/applicant/onboarding",
-    name: "ApplicantOnboarding",
-    component: ApplicantOnboarding,
-    meta: {
-      title: "PWD Job Portal | Applicant Onboarding",
-      requiresAuth: true,
-      requiredRole: "applicant",
-    },
-  },
-
-  {
     path: "/company-admin",
     component: CompanyAdminLayout,
     meta: { requiresAuth: true, requiredRole: "company_admin" },
@@ -567,6 +600,16 @@ const routes = [
         },
       },
       {
+        path: "applications",
+        name: "ApplicantApplications",
+        component: ApplicantApplications,
+        meta: {
+          title: "PWD Job Portal | My Applications",
+          requiresAuth: true,
+          requiredRole: "applicant",
+        },
+      },
+      {
         path: "profile",
         name: "ApplicantProfile",
         component: EmployerProfile,
@@ -582,6 +625,26 @@ const routes = [
         component: ApplicantTrainingProgress,
         meta: {
           title: "PWD Job Portal | Applicant Training Progress",
+          requiresAuth: true,
+          requiredRole: "applicant",
+        },
+      },
+      {
+        path: "interviews",
+        name: "ApplicantInterviews",
+        component: ApplicantInterviews,
+        meta: {
+          title: "PWD Job Portal | Applicant Interviews",
+          requiresAuth: true,
+          requiredRole: "applicant",
+        },
+      },
+      {
+        path: "messages",
+        name: "ApplicantMessages",
+        component: ApplicantMessages,
+        meta: {
+          title: "PWD Job Portal | Applicant Messages",
           requiresAuth: true,
           requiredRole: "applicant",
         },
@@ -614,12 +677,6 @@ router.beforeEach((to, from, next) => {
     } else if (!isAllowedRole(requiredRole, userRole)) {
       // User logged in but doesn't have required role
       next({ name: "LandingPage" })
-    } else if (
-      normalizeAuthRole(userRole) === "applicant" &&
-      !isApplicantProfileCompleted() &&
-      to.name !== "ApplicantOnboarding"
-    ) {
-      next({ name: "ApplicantOnboarding" })
     } else {
       // User is authenticated and has required role
       next()

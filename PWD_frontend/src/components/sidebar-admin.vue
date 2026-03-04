@@ -59,6 +59,11 @@ const menuItems = computed(() => {
 
   if (!isCompanyAdmin.value) {
     items.push({
+      to: `${basePath.value}/account-approval`,
+      icon: "bi bi-person-check",
+      label: "Account Approval",
+    })
+    items.push({
       to: `${basePath.value}/company-management`,
       icon: "bi bi-building",
       label: "Company Management",

@@ -17,25 +17,19 @@
           <img src="@/assets/titlelogo.png" class="logo-img" />
         </div>
 
-        <h2 class="form-h2">
-          Forgot Password
-          <p class="form-p">
-            Enter your email and weâ€™ll send you a one-time password (OTP).
-          </p>
-        </h2>
+        <h2 class="form-h2">Forgot Password</h2>
+        <p class="form-p">
+          Enter your email and we'll send you a one-time password (OTP).
+        </p>
 
-        <!-- EMAIL -->
-        <div class="form-group">
-          <label>Email</label>
-          <div class="input-wrapper icon-group">
-            <i class="bi bi-envelope-fill input-icon"></i>
-            <input
-              type="email"
-              placeholder="Enter your email"
-              v-model="email"
-              autocomplete="email"
-            />
-          </div>
+        <div class="input-wrapper icon-group">
+          <i class="bi bi-envelope-fill input-icon"></i>
+          <input
+            type="email"
+            placeholder="Enter your email"
+            v-model="email"
+            autocomplete="email"
+          />
         </div>
 
         <!-- SEND BUTTON -->

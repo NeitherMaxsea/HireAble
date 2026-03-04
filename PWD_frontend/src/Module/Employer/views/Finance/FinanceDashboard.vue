@@ -152,6 +152,8 @@ function formatDate(value) {
 }
 
 function formatLabel(value) {
+  const raw = String(value || "").trim().toLowerCase()
+  if (raw === "pending_finance_review") return "Pending"
   return String(value || "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase())

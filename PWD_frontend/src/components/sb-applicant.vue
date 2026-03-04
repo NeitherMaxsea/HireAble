@@ -163,8 +163,9 @@ const logout = async () => {
       duration: 3000,
       close: true,
       stopOnFocus: true,
+      className: 'toast-no-timer',
       style: {
-        background: "#0f172a"
+        background: "#16a34a"
       }
     }).showToast()
   } finally {
@@ -250,7 +251,7 @@ const logout = async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  overflow-y: auto;
+  overflow: hidden;
   padding-bottom: 8px;
 }
 

@@ -30,6 +30,30 @@
           </div>
         </div>
 
+        <div v-if="isApplicant" class="side-section">
+          <div class="side-title">Applicant Registration Details</div>
+          <div class="side-row">
+            <span class="side-label">Full Name</span>
+            <span class="side-value">{{ applicantDetails.fullName || "-" }}</span>
+          </div>
+          <div class="side-row">
+            <span class="side-label">Birth Date</span>
+            <span class="side-value">{{ applicantDetails.birthDate || "-" }}</span>
+          </div>
+          <div class="side-row">
+            <span class="side-label">Academic</span>
+            <span class="side-value">{{ applicantDetails.academicLevel || "-" }}</span>
+          </div>
+          <div class="side-row">
+            <span class="side-label">Address</span>
+            <span class="side-value">{{ applicantDetails.address || "-" }}</span>
+          </div>
+          <div class="side-row">
+            <span class="side-label">PWD ID No.</span>
+            <span class="side-value">{{ applicantDetails.pwdIdNumber || "-" }}</span>
+          </div>
+        </div>
+
         <div class="side-section">
           <div class="side-title">Account</div>
           <div class="side-row">
@@ -51,7 +75,7 @@
             </button>
           </div>
 
-          <div v-if="!isEditing" class="info-grid">
+          <div v-if="!isEditing && !isApplicant" class="info-grid">
             <div class="info-item">
               <span class="label">Username</span>
               <span class="value">{{ profile.username || "-" }}</span>
@@ -68,10 +92,18 @@
               <span class="label">Contact</span>
               <span class="value">{{ profile.contact || "-" }}</span>
             </div>
-            <div v-if="isApplicant" class="info-item">
-              <span class="label">Disability</span>
-              <span class="value">{{ profile.disability || "-" }}</span>
-            </div>
+          </div>
+
+          <div v-if="!isEditing && isApplicant" class="info-bullets-wrap">
+            <ul class="info-bullets">
+              <li><strong>Username:</strong> {{ profile.username || "-" }}</li>
+              <li><strong>Role:</strong> {{ displayRole }}</li>
+              <li><strong>Email:</strong> {{ profile.email || "-" }}</li>
+              <li><strong>Contact:</strong> {{ profile.contact || "-" }}</li>
+              <li><strong>Disability:</strong> {{ profile.disability || "-" }}</li>
+              <li><strong>Sex at Birth:</strong> {{ applicantDetails.sexAtBirth || "-" }}</li>
+              <li><strong>Preferred Skills:</strong> {{ applicantDetails.preferredSkills || "-" }}</li>
+            </ul>
           </div>
 
           <div v-if="isEditing" class="modal-backdrop" @click.self="toggleEdit">
@@ -145,6 +177,14 @@
                       <option>Others</option>
                     </select>
                   </div>
+                  <div v-if="isApplicant" class="form-group form-group-full">
+                    <label>Preferred Skills / Roles</label>
+                    <input
+                      type="text"
+                      v-model="form.preferredSkillsText"
+                      placeholder="Ex. Cashier, Office Staff, Encoder"
+                    />
+                  </div>
                 </div>
               </div>
               <div class="modal-footer">
@@ -171,6 +211,7 @@ import "toastify-js/src/toastify.css"
 
 const loading = ref(true)
 const profile = ref({
+  name: "",
   username: "",
   email: "",
   contact: "",
@@ -178,7 +219,9 @@ const profile = ref({
   photoURL: "",
   photoPath: "",
   role: "",
-  createdAt: ""
+  createdAt: "",
+  onboardingData: {},
+  applicantProfile: null,
 })
 
 const isEditing = ref(false)
@@ -191,7 +234,8 @@ const form = ref({
   contact: "",
   disability: "",
   photoURL: "",
-  photoPath: ""
+  photoPath: "",
+  preferredSkillsText: "",
 })
 
 const userInitial = computed(() => {
@@ -210,6 +254,110 @@ const isApplicant = computed(() =>
   (profile.value.role || "").toLowerCase() === "applicant"
 )
 
+const resolveCurrentUid = () =>
+  String(
+    auth.currentUser?.uid ||
+    localStorage.getItem("userUid") ||
+    localStorage.getItem("uid") ||
+    localStorage.getItem("sessionUid") ||
+    ""
+  ).trim()
+
+const formatCreatedDate = (value) => {
+  if (!value) return ""
+  try {
+    if (typeof value?.toDate === "function") {
+      return value.toDate().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    }
+    const d = new Date(value)
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return ""
+}
+
+function normalizeOnboardingData(source) {
+  const raw = source?.applicantProfile ?? source?.applicant_profile ?? source?.onboardingData ?? source?.onboarding_data ?? {}
+  if (!raw) return {}
+  if (typeof raw === "object") return raw
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === "object" ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+const applicantDetails = computed(() => {
+  const ob = profile.value.onboardingData && typeof profile.value.onboardingData === "object"
+    ? profile.value.onboardingData
+    : {}
+
+  const pick = (...keys) => {
+    for (const key of keys) {
+      const value = ob?.[key]
+      if (value !== undefined && value !== null && String(value).trim() !== "") {
+        return value
+      }
+    }
+    return ""
+  }
+
+  const firstName = String(pick("firstName", "first_name")).trim()
+  const lastName = String(pick("lastName", "last_name")).trim()
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() ||
+    String(profile.value.name || profile.value.username || "").trim()
+  const addressCity = String(pick("addressCity", "address_city")).trim()
+  const addressProvince = String(pick("addressProvince", "address_province")).trim()
+  const address = [addressCity, addressProvince].filter(Boolean).join(", ").trim()
+  const preferredSkillsRaw = ob?.preferredSkills ?? ob?.preferred_skills
+  const preferredSkills = Array.isArray(preferredSkillsRaw)
+    ? preferredSkillsRaw.filter(Boolean).join(", ")
+    : String(pick("preferredRole", "preferred_role")).trim()
+  const salaryRange =
+    (String(pick("salaryMin", "salary_min")).trim() || String(pick("salaryMax", "salary_max")).trim())
+      ? `${String(pick("salaryMin", "salary_min")).trim() || "0"} - ${String(pick("salaryMax", "salary_max")).trim() || "0"}`
+      : ""
+
+  return {
+    fullName,
+    birthDate: String(pick("birthDate", "birth_date")).trim(),
+    academicLevel: String(pick("academicLevel", "academic_level")).trim(),
+    address,
+    pwdIdNumber: String(pick("pwdIdNumber", "pwd_id_number")).trim(),
+    sexAtBirth: String(pick("sexAtBirth", "sex_at_birth")).trim(),
+    preferredSkills,
+    firstName,
+    lastName,
+    mobileNumber: String(pick("mobileNumber", "mobile_number")).trim(),
+    addressProvince,
+    addressCity,
+    yearsExperience: String(pick("yearsExperience", "years_experience")).trim(),
+    preferredProvince: String(pick("preferredProvince", "preferred_province")).trim(),
+    preferredCity: String(pick("preferredCity", "preferred_city")).trim(),
+    workMode: String(pick("workMode", "work_mode")).trim(),
+    salaryRange,
+    profileSummary: String(pick("profileSummary", "profile_summary")).trim(),
+    profilePictureUrl: String(pick("profilePictureUrl", "profile_picture_url")).trim(),
+    pwdIdImageUrl: String(pick("pwdIdImageUrl", "pwd_id_image_url")).trim(),
+  }
+})
+
+
 const loadProfile = async () => {
   const storedEmail = localStorage.getItem("userEmail")
   const storedName = localStorage.getItem("userName")
@@ -217,28 +365,25 @@ const loadProfile = async () => {
   const storedPhoto = localStorage.getItem("userPhotoURL")
 
   try {
-    const user = auth.currentUser
-    if (user?.uid) {
-      let snap = await getDoc(doc(db, "users", user.uid))
+    const uid = resolveCurrentUid()
+    if (uid) {
+      let snap = await getDoc(doc(db, "users", uid))
       if (!snap.exists()) {
-        snap = await getDoc(doc(db, "Users", user.uid))
+        snap = await getDoc(doc(db, "Users", uid))
       }
       if (snap.exists()) {
         const data = snap.data()
+        profile.value.name = data.name || ""
         profile.value.username = data.username || data.name || storedName || "User"
-        profile.value.email = data.email || user.email || storedEmail || ""
+        profile.value.email = data.email || auth.currentUser?.email || storedEmail || ""
         profile.value.contact = data.contact || ""
         profile.value.disability = data.disability || ""
         profile.value.photoURL = data.photoURL || ""
         profile.value.photoPath = data.photoPath || ""
         profile.value.role = data.role || storedRole || ""
-        profile.value.createdAt = data.createdAt?.toDate
-          ? data.createdAt.toDate().toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "long",
-              day: "numeric"
-            })
-          : ""
+        profile.value.onboardingData = normalizeOnboardingData(data)
+        profile.value.applicantProfile = data.applicantProfile || data.applicant_profile || null
+        profile.value.createdAt = formatCreatedDate(data.createdAt)
         form.value.username = profile.value.username || ""
         form.value.contact = profile.value.contact || ""
         form.value.disability = profile.value.disability || ""
@@ -248,22 +393,82 @@ const loadProfile = async () => {
           localStorage.setItem("userPhotoURL", profile.value.photoURL)
         }
         loading.value = false
-        return
       }
+
+      try {
+        const res = await api.get(`/users/${uid}`)
+        const backendUser = res?.data || {}
+        const onboardingData = normalizeOnboardingData(backendUser)
+
+        profile.value.username =
+          backendUser.username ||
+          profile.value.username ||
+          backendUser.name ||
+          storedName ||
+          "User"
+        profile.value.name = backendUser.name || profile.value.name || ""
+        profile.value.email = backendUser.email || profile.value.email || storedEmail || ""
+        profile.value.contact =
+          backendUser.contact ||
+          profile.value.contact ||
+          onboardingData.mobileNumber ||
+          ""
+        profile.value.disability =
+          backendUser.disability ||
+          profile.value.disability ||
+          onboardingData.pwdCategory ||
+          ""
+        profile.value.photoURL =
+          backendUser.photoURL ||
+          backendUser.photoUrl ||
+          profile.value.photoURL ||
+          onboardingData.profilePictureUrl ||
+          storedPhoto ||
+          ""
+        profile.value.photoPath =
+          backendUser.photoPath ||
+          backendUser.photo_path ||
+          profile.value.photoPath ||
+          onboardingData.profilePicturePath ||
+          ""
+        profile.value.role = backendUser.role || profile.value.role || storedRole || ""
+        profile.value.onboardingData = onboardingData
+        profile.value.applicantProfile = backendUser.applicantProfile || backendUser.applicant_profile || null
+        profile.value.createdAt = profile.value.createdAt || formatCreatedDate(backendUser.createdAt)
+
+        form.value.username = profile.value.username || ""
+        form.value.contact = profile.value.contact || ""
+        form.value.disability = profile.value.disability || ""
+        form.value.photoURL = profile.value.photoURL || ""
+        form.value.photoPath = profile.value.photoPath || ""
+        form.value.preferredSkillsText = applicantDetails.value.preferredSkills || ""
+        if (profile.value.photoURL) {
+          localStorage.setItem("userPhotoURL", profile.value.photoURL)
+        }
+      } catch {
+        // Keep local/Firestore values if backend user endpoint fails.
+      }
+
+      loading.value = false
+      return
     }
 
     profile.value.username = storedName || "User"
+    profile.value.name = ""
     profile.value.email = storedEmail || ""
     profile.value.contact = ""
     profile.value.disability = ""
     profile.value.photoURL = storedPhoto || ""
     profile.value.photoPath = ""
     profile.value.role = storedRole || ""
+    profile.value.onboardingData = {}
+    profile.value.applicantProfile = null
     form.value.username = profile.value.username || ""
     form.value.contact = profile.value.contact || ""
     form.value.disability = profile.value.disability || ""
     form.value.photoURL = profile.value.photoURL || ""
     form.value.photoPath = profile.value.photoPath || ""
+    form.value.preferredSkillsText = applicantDetails.value.preferredSkills || ""
   } finally {
     loading.value = false
   }
@@ -276,6 +481,7 @@ const toggleEdit = () => {
     form.value.disability = profile.value.disability || ""
     form.value.photoURL = profile.value.photoURL || ""
     form.value.photoPath = profile.value.photoPath || ""
+    form.value.preferredSkillsText = applicantDetails.value.preferredSkills || ""
   }
   isEditing.value = !isEditing.value
 }
@@ -325,8 +531,8 @@ const handlePhotoSelected = async (e) => {
   const file = e.target.files?.[0]
   if (!file) return
 
-  const user = auth.currentUser
-  if (!user?.uid) {
+  const uid = resolveCurrentUid()
+  if (!uid) {
     Toastify({
       text: "Please login again",
       backgroundColor: "#e74c3c",
@@ -379,13 +585,13 @@ const handlePhotoSelected = async (e) => {
     localStorage.setItem("userPhotoURL", url)
 
     try {
-      await updateDoc(doc(db, "users", user.uid), {
+      await updateDoc(doc(db, "users", uid), {
         photoURL: url,
         photoPath: path,
       })
     } catch {
       try {
-        await updateDoc(doc(db, "Users", user.uid), {
+        await updateDoc(doc(db, "Users", uid), {
           photoURL: url,
           photoPath: path,
         })
@@ -445,9 +651,10 @@ const handleImageError = (target = "profile") => {
   profile.value.photoURL = ""
 }
 
+
 const saveProfile = async () => {
-  const user = auth.currentUser
-  if (!user?.uid) {
+  const uid = resolveCurrentUid()
+  if (!uid) {
     Toastify({
       text: "Please login again",
       backgroundColor: "#e74c3c",
@@ -467,6 +674,20 @@ const saveProfile = async () => {
 
     const backendPayload = {
       ...payload,
+      ...(isApplicant.value
+        ? {
+            onboardingData: {
+              ...(profile.value.onboardingData && typeof profile.value.onboardingData === "object"
+                ? profile.value.onboardingData
+                : {}),
+              preferredSkills: form.value.preferredSkillsText
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+              preferredRole: form.value.preferredSkillsText.trim(),
+            },
+          }
+        : {}),
       profileCompleted: isApplicant.value
         ? Boolean(
             payload.username.trim() &&
@@ -477,13 +698,13 @@ const saveProfile = async () => {
     }
 
     try {
-      await updateDoc(doc(db, "users", user.uid), payload)
+      await updateDoc(doc(db, "users", uid), payload)
     } catch {
-      await updateDoc(doc(db, "Users", user.uid), payload)
+      await updateDoc(doc(db, "Users", uid), payload)
     }
 
     try {
-      await api.put(`/users/${user.uid}`, backendPayload)
+      await api.put(`/users/${uid}`, backendPayload)
       localStorage.setItem("userProfileCompleted", String(Boolean(backendPayload.profileCompleted)))
     } catch {
       // Keep Firestore profile save successful even if backend sync fails.
@@ -494,6 +715,34 @@ const saveProfile = async () => {
     profile.value.disability = payload.disability || ""
     profile.value.photoURL = payload.photoURL || ""
     profile.value.photoPath = payload.photoPath || ""
+    if (isApplicant.value) {
+      const nextSkills = form.value.preferredSkillsText
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+      profile.value.onboardingData = {
+        ...(profile.value.onboardingData && typeof profile.value.onboardingData === "object"
+          ? profile.value.onboardingData
+          : {}),
+        preferredSkills: nextSkills,
+        preferredRole: form.value.preferredSkillsText.trim(),
+      }
+      try {
+        const uidKey = String(
+          localStorage.getItem("userUid") ||
+          localStorage.getItem("uid") ||
+          localStorage.getItem("sessionUid") ||
+          ""
+        ).trim()
+        const emailKey = String(localStorage.getItem("userEmail") || "").trim().toLowerCase()
+        const introKey = uidKey ? `applicantIntroShown:${uidKey}` : (emailKey ? `applicantIntroShown:${emailKey}` : "")
+        const prefKey = uidKey ? `applicantSkillsPref:${uidKey}` : (emailKey ? `applicantSkillsPref:${emailKey}` : "")
+        if (introKey) localStorage.setItem(introKey, "1")
+        if (prefKey) localStorage.setItem(prefKey, JSON.stringify(nextSkills))
+      } catch {
+        // ignore localStorage sync errors
+      }
+    }
     localStorage.setItem("userName", profile.value.username || "User")
     if (profile.value.photoURL) {
       localStorage.setItem("userPhotoURL", profile.value.photoURL)
@@ -737,6 +986,35 @@ onMounted(loadProfile)
   font-size:14px;
 }
 
+.info-bullets-wrap{
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  padding:14px 16px;
+}
+
+.info-bullets{
+  margin:0;
+  padding-left:18px;
+  display:grid;
+  gap:14px;
+  color:#0f172a;
+  font-size:14px;
+}
+
+.info-bullets li{
+  line-height:1.45;
+}
+
+.info-bullets li strong{
+  color:inherit;
+}
+
+.info-bullets li::marker{
+  color:#16a34a;
+}
+
+
 .edit-form{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -747,6 +1025,10 @@ onMounted(loadProfile)
   display:flex;
   flex-direction:column;
   gap:6px;
+}
+
+.form-group-full{
+  grid-column:1 / -1;
 }
 
 .form-group label{

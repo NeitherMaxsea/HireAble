@@ -98,6 +98,8 @@ const otpRefs = []
 const loading = ref(false)
 const otpStatus = ref("idle")
 const redirecting = ref(false)
+const postVerifyRedirectSeconds = 5
+const postVerifyRedirectCountdown = ref(postVerifyRedirectSeconds)
 
 // 🔒 RESEND LIMITATION
 const maxResend = 2
@@ -105,6 +107,7 @@ const resendCount = ref(0)
 const countdown = ref(60)
 const canResend = ref(false)
 let timer = null
+let postVerifyRedirectTimer = null
 
 // START TIMER
 const startTimer = () => {
@@ -148,9 +151,51 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (postVerifyRedirectTimer) clearInterval(postVerifyRedirectTimer)
 })
 
+const startPostVerifyRedirectToLanding = () => {
+  redirecting.value = true
+  postVerifyRedirectCountdown.value = postVerifyRedirectSeconds
+
+  const toastTextEl = document.createElement("div")
+  toastTextEl.style.fontWeight = "600"
+  toastTextEl.textContent = `Your account will be reviewed first. We will email you for updates. Redirecting to landing page in ${postVerifyRedirectCountdown.value}s.`
+
+  Toastify({
+    node: toastTextEl,
+    duration: postVerifyRedirectSeconds * 1000,
+    close: false,
+    gravity: "top",
+    position: "right",
+    stopOnFocus: true,
+    backgroundColor: "#16a34a",
+    style: { "--toast-duration": `${postVerifyRedirectSeconds * 1000}ms` }
+  }).showToast()
+
+  postVerifyRedirectTimer = setInterval(() => {
+    postVerifyRedirectCountdown.value -= 1
+    if (postVerifyRedirectCountdown.value > 0) {
+      toastTextEl.textContent = `Your account will be reviewed first. We will email you for updates. Redirecting to landing page in ${postVerifyRedirectCountdown.value}s.`
+      return
+    }
+
+    clearInterval(postVerifyRedirectTimer)
+    postVerifyRedirectTimer = null
+    router.replace("/landingpage")
+  }, 1000)
+}
+
+const tryAutoVerify = () => {
+  if (loading.value || redirecting.value) return
+  const otpValue = otpDigits.value.join("")
+  if (otpValue.length === 6 && otpDigits.value.every((d) => String(d || "").length === 1)) {
+    void handleVerify()
+  }
+}
+
 const handleVerify = async () => {
+  if (loading.value || redirecting.value) return
   const otpValue = otpDigits.value.join("")
   if (otpValue.length !== 6) {
     otpStatus.value = "error"
@@ -168,14 +213,14 @@ const handleVerify = async () => {
 
     if (res.data.valid) {
       otpStatus.value = "success"
-      Toastify({
-        text: "Email verified successfully.",
-        backgroundColor: "#2ecc71"
-      }).showToast()
-
       localStorage.removeItem("pendingOtpEmail")
 
       if (mode === "reset") {
+        Toastify({
+          text: "Email verified successfully.",
+          backgroundColor: "#2ecc71",
+          className: "toast-no-timer"
+        }).showToast()
         redirecting.value = true
         await nextTick()
         await new Promise((resolve) => setTimeout(resolve, 600))
@@ -183,6 +228,8 @@ const handleVerify = async () => {
           path: "/auth/reset-password",
           query: { email: email.value }
         })
+      } else if (mode === "register") {
+        startPostVerifyRedirectToLanding()
       } else {
         router.push("/login")
       }
@@ -231,6 +278,12 @@ const onOtpInput = (e, index) => {
   if (val && index < otpDigits.value.length - 1) {
     otpRefs[index + 1]?.focus()
   }
+
+  if (val) {
+    queueMicrotask(() => {
+      tryAutoVerify()
+    })
+  }
 }
 
 const onOtpKeydown = (e, index) => {
@@ -249,6 +302,9 @@ const onOtpPaste = (e) => {
   const nextIndex = Math.min(paste.length, 5)
   otpRefs[nextIndex]?.focus()
   e.preventDefault()
+  queueMicrotask(() => {
+    tryAutoVerify()
+  })
 }
 </script>
 
@@ -313,7 +369,9 @@ const onOtpPaste = (e) => {
 .page-loading {
   position: fixed;
   inset: 0;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -324,9 +382,10 @@ const onOtpPaste = (e) => {
   width: 46px;
   height: 46px;
   border: 4px solid #e5e7eb;
-  border-top-color: #2563eb;
+  border-top-color: #16a34a;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  box-shadow: 0 8px 22px rgba(22, 163, 74, 0.16);
 }
 
 @keyframes spin {

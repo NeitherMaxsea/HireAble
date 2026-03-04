@@ -134,6 +134,7 @@ const resetPassword = async () => {
     Toastify({
       text: "Password updated successfully.",
       backgroundColor: "#2ecc71",
+      className: "toast-no-timer",
     }).showToast()
     router.push("/login")
   } catch (error) {

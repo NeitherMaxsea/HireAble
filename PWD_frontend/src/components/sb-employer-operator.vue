@@ -316,8 +316,9 @@ async function logout() {
     duration: 3000,
     close: true,
     stopOnFocus: true,
+      className: 'toast-no-timer',
     style: {
-      background: "#0f172a"
+      background: "#16a34a"
     }
   }).showToast()
 }

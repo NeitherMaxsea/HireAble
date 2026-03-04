@@ -105,6 +105,13 @@
           </div>
         </div>
 
+        <div v-if="selectedInterview.applicantResponse === 'reschedule_rejected'" class="notes-card reject-feedback-card">
+          <h4>Reschedule Request Result</h4>
+          <p class="reject-feedback-text">
+            {{ selectedInterview.applicantResponseNote || "Your reschedule request was rejected by HR." }}
+          </p>
+        </div>
+
         <div class="notes-card">
           <div class="notes-head">
             <h4>Interview Notes</h4>
@@ -122,8 +129,15 @@
         </div>
 
         <div class="actions-row">
-          <button type="button" class="primary-btn" @click="markConfirmed">
-            Confirm Schedule
+          <button type="button" class="primary-btn" :disabled="confirmSubmitting || !canConfirmSelectedInterview" @click="markConfirmed">
+            <span v-if="confirmSubmitting" class="btn-spinner" aria-hidden="true"></span>
+            {{
+              confirmSubmitting
+                ? "Confirming..."
+                : canConfirmSelectedInterview
+                  ? "Confirm Schedule"
+                  : "Schedule Confirmed"
+            }}
           </button>
           <button type="button" class="ghost-btn" @click="openRescheduleModal">
             Request Reschedule
@@ -177,6 +191,7 @@ const selectedInterviewId = ref("")
 const showRescheduleModal = ref(false)
 const rescheduleReason = ref("")
 const rescheduleSubmitting = ref(false)
+const confirmSubmitting = ref(false)
 let refreshTimer = null
 
 const filteredInterviews = computed(() => {
@@ -186,6 +201,13 @@ const filteredInterviews = computed(() => {
 
 const selectedInterview = computed(() => {
   return interviews.value.find((item) => item.id === selectedInterviewId.value) || filteredInterviews.value[0] || null
+})
+
+const canConfirmSelectedInterview = computed(() => {
+  const entry = selectedInterview.value
+  if (!entry) return false
+  const response = String(entry.applicantResponse || "").trim().toLowerCase()
+  return response !== "agreed"
 })
 
 function resolveApplicantIdentity() {
@@ -323,6 +345,8 @@ function toInterviewModel(entry) {
     statusKey: status.key,
     contactPerson: String(entry.interviewer || "HR Recruitment Team").trim(),
     contactEmail: "hr@hireable.local",
+    applicantResponse: String(entry.applicantResponse || "").trim().toLowerCase(),
+    applicantResponseNote: String(entry.applicantResponseNote || "").trim(),
     checklist: buildChecklist(entry.mode),
     notes,
     scheduledAtMillis: Date.parse(String(entry.scheduledAt || "")) || 0,
@@ -342,34 +366,67 @@ function entryBelongsToApplicant(entry, identity, applicationIds = new Set()) {
   return false
 }
 
-async function loadApplicantApplicationIds(identity) {
+async function loadApplicantApplications(identity) {
   const params = {}
   if (identity.id) {
     params.applicantId = identity.id
   } else if (identity.email) {
     params.applicantEmail = identity.email
   } else {
-    return new Set()
+    return []
   }
 
   try {
     const res = await api.get("/applications", { params })
-    const rows = Array.isArray(res?.data) ? res.data : []
-    return new Set(rows.map((row) => String(row?.id || "").trim()).filter(Boolean))
+    return Array.isArray(res?.data) ? res.data : []
   } catch {
-    return new Set()
+    return []
   }
 }
 
-async function loadInterviews() {
-  const identity = resolveApplicantIdentity()
-  if (!identity.id && !identity.email) {
-    interviews.value = []
-    selectedInterviewId.value = ""
-    return
+async function loadVisibleJobIds() {
+  try {
+    const res = await api.get("/jobs")
+    const rows = Array.isArray(res?.data) ? res.data : []
+    return new Set(rows.map((row) => String(row?.id || row?.jobId || "").trim()).filter(Boolean))
+  } catch {
+    return null
   }
-  const applicationIds = await loadApplicantApplicationIds(identity)
+}
 
+function inferInterviewJobId(entry, applicationJobIdByApplicationId) {
+  const directJobId = String(entry?.jobId || "").trim()
+  if (directJobId) return directJobId
+
+  const applicationId = String(entry?.applicationId || "").trim()
+  if (!applicationId) return ""
+
+  return String(applicationJobIdByApplicationId.get(applicationId) || "").trim()
+}
+
+function hasExistingJob(entry, applicationJobIdByApplicationId, visibleJobIds) {
+  if (!(visibleJobIds instanceof Set)) return true
+  const inferredJobId = inferInterviewJobId(entry, applicationJobIdByApplicationId)
+  // If we cannot resolve a linked job id, hide it to prevent ghost schedules.
+  if (!inferredJobId) return false
+  return visibleJobIds.has(inferredJobId)
+}
+
+function sortByScheduleAscending(a, b) {
+  const left = Date.parse(String(a?.scheduledAt || ""))
+  const right = Date.parse(String(b?.scheduledAt || ""))
+  const l = Number.isNaN(left) ? 0 : left
+  const r = Number.isNaN(right) ? 0 : right
+  return l - r
+}
+
+function mapAndSortInterviews(rows) {
+  return rows
+    .map((entry) => toInterviewModel(entry))
+    .sort((a, b) => a.scheduledAtMillis - b.scheduledAtMillis)
+}
+
+async function loadInterviewRows(identity) {
   let rows = []
   const params = {}
   if (identity.id) params.applicantId = identity.id
@@ -382,10 +439,41 @@ async function loadInterviews() {
     rows = []
   }
 
-  const mapped = rows
+  return rows
+}
+
+async function loadInterviews() {
+  const identity = resolveApplicantIdentity()
+  if (!identity.id && !identity.email) {
+    interviews.value = []
+    selectedInterviewId.value = ""
+    return
+  }
+
+  const [applicationRows, interviewRows, visibleJobIds] = await Promise.all([
+    loadApplicantApplications(identity),
+    loadInterviewRows(identity),
+    loadVisibleJobIds(),
+  ])
+
+  const applicationIds = new Set(
+    applicationRows.map((row) => String(row?.id || "").trim()).filter(Boolean)
+  )
+  const applicationJobIdByApplicationId = new Map(
+    applicationRows
+      .map((row) => [String(row?.id || "").trim(), String(row?.jobId || "").trim()])
+      .filter(([appId]) => Boolean(appId))
+  )
+
+  const ownedRows = interviewRows
     .filter((entry) => entryBelongsToApplicant(entry, identity, applicationIds))
-    .map((entry) => toInterviewModel(entry))
-    .sort((a, b) => a.scheduledAtMillis - b.scheduledAtMillis)
+    .sort(sortByScheduleAscending)
+
+  const visibleRows = ownedRows.filter((entry) =>
+    hasExistingJob(entry, applicationJobIdByApplicationId, visibleJobIds)
+  )
+
+  const mapped = mapAndSortInterviews(visibleRows)
 
   interviews.value = mapped
 
@@ -398,19 +486,21 @@ function selectInterview(item) {
   selectedInterviewId.value = item.id
 }
 
-function toast(text, background = "#0f172a") {
+function toast(text, background = "#0f172a", noTimer = false) {
   Toastify({
     text,
     duration: 2500,
     gravity: "top",
     position: "right",
     stopOnFocus: true,
+    className: noTimer ? "toast-no-timer" : "",
     style: { background },
   }).showToast()
 }
 
 function markConfirmed() {
-  if (!selectedInterview.value) return
+  if (!selectedInterview.value || confirmSubmitting.value || !canConfirmSelectedInterview.value) return
+  confirmSubmitting.value = true
   api
     .put(`/interview-schedules/${selectedInterview.value.id}`, {
       applicantResponse: "agreed",
@@ -419,11 +509,14 @@ function markConfirmed() {
     })
     .then(async () => {
       await loadInterviews()
-      toast("Interview schedule confirmed.", "#15803d")
+      toast("Interview schedule confirmed.", "#15803d", true)
     })
     .catch((err) => {
       console.error(err)
       toast(err?.response?.data?.message || "Failed to confirm attendance.", "#dc2626")
+    })
+    .finally(() => {
+      confirmSubmitting.value = false
     })
 }
 
@@ -719,6 +812,19 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+.reject-feedback-card {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.reject-feedback-text {
+  margin: 0;
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .info-card ul {
   margin: 0;
   padding-left: 18px;
@@ -814,12 +920,35 @@ onBeforeUnmount(() => {
   border: 0;
   background: linear-gradient(135deg, #15803d, #22c55e);
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ghost-btn {
   border: 1px solid #dbe4ee;
   background: #fff;
   color: #334155;
+}
+
+.primary-btn:disabled,
+.ghost-btn:disabled {
+  opacity: .72;
+  cursor: not-allowed;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.38);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: btn-spin .7s linear infinite;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
 }
 
 .fade-enter-active,

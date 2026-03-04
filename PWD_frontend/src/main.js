@@ -8,6 +8,31 @@ import { clearLocalSession } from './lib/session-auth'
 import Toastify from 'toastify-js'
 import 'toastify-js/src/toastify.css'
 
+Toastify.defaults.duration = 5000
+Toastify.defaults.close = false
+Toastify.defaults.style = {
+  ...(Toastify.defaults.style || {}),
+  '--toast-duration': '5000ms',
+}
+
+if (Toastify?.lib?.init?.prototype?.showToast) {
+  const originalShowToast = Toastify.lib.init.prototype.showToast
+  Toastify.lib.init.prototype.showToast = function patchedShowToast() {
+    const rawDuration = Number(this?.options?.duration)
+    const duration = Number.isFinite(rawDuration) && rawDuration > 0
+      ? rawDuration
+      : Number(Toastify.defaults.duration || 5000)
+
+    this.options.close = false
+    this.options.style = {
+      ...(this.options.style || {}),
+      '--toast-duration': `${duration}ms`,
+    }
+
+    return originalShowToast.call(this)
+  }
+}
+
 let pingInFlight = false
 
 function readSessionPayload() {

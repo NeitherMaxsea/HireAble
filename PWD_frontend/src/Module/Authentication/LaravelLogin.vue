@@ -37,7 +37,16 @@ function normalizeRole(value) {
   const role = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
   if (role === "hr_department") return "hr"
   if (role === "operation_department") return "operation"
-  if (role === "financial_department" || role === "finance_department") return "finance"
+  if (
+    role === "financial_department" ||
+    role === "finance_department" ||
+    role === "financial" ||
+    role === "finance" ||
+    role === "finance_staff" ||
+    role === "finance_officer" ||
+    role === "financial_officer" ||
+    role === "accounting"
+  ) return "finance"
   if (role === "companyadmin") return "company_admin"
   return role
 }

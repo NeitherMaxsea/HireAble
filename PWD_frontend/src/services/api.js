@@ -104,8 +104,12 @@ function parseJsonLoose(text) {
 }
 
 async function request(method, path, data, options = {}) {
-  const { headers = {}, params, onUploadProgress } = options
+  const { headers = {}, params, onUploadProgress, timeoutMs } = options
   const url = buildUrl(path, params)
+  const resolvedTimeoutMs =
+    Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+      ? Number(timeoutMs)
+      : 15000
 
   let body
   const finalHeaders = { ...headers }
@@ -127,23 +131,42 @@ async function request(method, path, data, options = {}) {
   }
 
   let response
+  let timeoutId = null
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null
+  if (controller) {
+    timeoutId = setTimeout(() => {
+      try {
+        controller.abort()
+      } catch {
+        // no-op
+      }
+    }, resolvedTimeoutMs)
+  }
+
   try {
     response = await fetch(url, {
       method,
       headers: finalHeaders,
       body,
+      ...(controller ? { signal: controller.signal } : {}),
     })
   } catch (cause) {
+    const isAbortError = cause?.name === "AbortError"
     const error = new Error(
-      `Network error while requesting ${url}. Check that the API server is running and VITE_API_BASE_URL is correct.`,
+      isAbortError
+        ? `Request timed out after ${resolvedTimeoutMs}ms: ${url}`
+        : `Network error while requesting ${url}. Check that the API server is running and VITE_API_BASE_URL is correct.`,
     )
     error.cause = cause
     error.response = {
-      status: 0,
+      status: isAbortError ? 408 : 0,
       data: null,
     }
-    error.isNetworkError = true
+    error.isNetworkError = !isAbortError
+    error.isTimeoutError = isAbortError
     throw error
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
   }
 
   const text = await response.text()

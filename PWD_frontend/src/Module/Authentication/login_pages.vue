@@ -102,7 +102,7 @@
       <div class="company-modal">
         <h3>Company Admin Verification</h3>
         <p class="modal-text">
-          Enter your 6-digit company admin verification code.
+          Enter the 6-digit OTP sent to your email for company admin verification.
         </p>
         <div class="modal-input-wrap">
           <input
@@ -191,6 +191,16 @@ const goRegister = () => {
   router.push({ path: "/role", query: { force: "1" } })
 }
 
+function showLoginToast(text, backgroundColor = "#e74c3c", duration = 3200) {
+  Toastify({
+    text,
+    backgroundColor,
+    duration,
+    stopOnFocus: false,
+    className: "toast-no-timer",
+  }).showToast()
+}
+
 function createSessionId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -200,7 +210,16 @@ function normalizeRole(value) {
   const role = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
   if (role === "hr_department") return "hr"
   if (role === "operation_department") return "operation"
-  if (role === "financial_department" || role === "finance_department") return "finance"
+  if (
+    role === "financial_department" ||
+    role === "finance_department" ||
+    role === "financial" ||
+    role === "finance" ||
+    role === "finance_staff" ||
+    role === "finance_officer" ||
+    role === "financial_officer" ||
+    role === "accounting"
+  ) return "finance"
   if (role === "companyadmin") return "company_admin"
   return role
 }
@@ -211,7 +230,7 @@ function finishLogin(data, normalizedEmail, acceptedSessionKey = "") {
     ? "admins"
     : "users"
   if (!role) {
-    Toastify({ text: "Role missing in account profile. Please contact admin.", backgroundColor: "#e74c3c" }).showToast()
+    showLoginToast("Role missing in account profile. Please contact admin.")
     return
   }
 
@@ -234,21 +253,12 @@ function finishLogin(data, normalizedEmail, acceptedSessionKey = "") {
   localStorage.setItem("sessionUid", String(data.id || ""))
   localStorage.setItem("userCollection", accountType)
   localStorage.setItem("userProfileCompleted", String(Boolean(data.profileCompleted)))
+  localStorage.setItem("userIsFirstLogin", String(Boolean(data.isFirstLogin)))
 
-  Toastify({ text: "Login successful!", backgroundColor: "#2ecc71" }).showToast()
+  showLoginToast("Login successful!", "#2ecc71", 2200)
 
   if (role === "applicant") {
-    if (data.profileCompleted === false) {
-      router.replace("/applicant/onboarding")
-      return
-    }
-    const profileFillMarker = String(localStorage.getItem("newApplicantNeedsProfileFill") || "").trim().toLowerCase()
-    const loggedInEmail = String(data.email || normalizedEmail || "").trim().toLowerCase()
-    if (profileFillMarker && loggedInEmail && profileFillMarker === loggedInEmail) {
-      localStorage.removeItem("newApplicantNeedsProfileFill")
-      router.replace("/applicant/onboarding")
-      return
-    }
+    localStorage.removeItem("newApplicantNeedsProfileFill")
     router.replace("/applicant/job_list")
   } else if (role === "admin") {
     router.replace("/admin/dashboard")
@@ -273,7 +283,7 @@ function closeSessionInUseModal() {
 async function forceLoginAfterSessionInUse() {
   const normalizedEmail = email.value.trim()
   if (!normalizedEmail || !password.value) {
-    Toastify({ text: "Please enter your credentials again.", backgroundColor: "#e74c3c" }).showToast()
+    showLoginToast("Please enter your email or username and password")
     return
   }
 
@@ -293,11 +303,17 @@ async function forceLoginAfterSessionInUse() {
 
     const res = await api.post("/auth/login", payload)
 
+    /*
     if (res.data?.requiresCompanyAdminVerification) {
       showSessionInUseModal.value = false
       showCompanyVerificationModal.value = true
+      Toastify({
+        text: res.data?.message || "Company admin OTP sent to your email.",
+        backgroundColor: "#16a34a",
+      }).showToast()
       return
     }
+    */
 
     const acceptedSessionKey = String(res.data?.sessionKey || sessionKey)
     showSessionInUseModal.value = false
@@ -306,7 +322,7 @@ async function forceLoginAfterSessionInUse() {
     pendingSessionKey.value = ""
   } catch (error) {
     const message = error?.response?.data?.message || "Force login failed"
-    Toastify({ text: message, backgroundColor: "#e74c3c" }).showToast()
+    showLoginToast(message)
   } finally {
     sessionInUseActionLoading.value = false
   }
@@ -316,7 +332,7 @@ const login = async () => {
   const normalizedEmail = email.value.trim()
 
   if (!normalizedEmail || !password.value) {
-    Toastify({ text: "Please enter your email or username and password", backgroundColor: "#e74c3c" }).showToast()
+    showLoginToast("Please enter your email or username and password")
     return
   }
 
@@ -332,11 +348,17 @@ const login = async () => {
       sessionKey,
     })
 
+    /*
     if (res.data?.requiresCompanyAdminVerification) {
       showCompanyVerificationModal.value = true
       verificationCode.value = ""
+      Toastify({
+        text: res.data?.message || "Company admin OTP sent to your email.",
+        backgroundColor: "#16a34a",
+      }).showToast()
       return
     }
+    */
 
     const acceptedSessionKey = String(res.data?.sessionKey || pendingSessionKey.value || sessionKey)
     finishLogin(res.data?.user || {}, normalizedEmail, acceptedSessionKey)
@@ -344,6 +366,9 @@ const login = async () => {
   } catch (error) {
     let message = "Login failed"
     if (error?.response?.status === 401) message = "Incorrect email or password"
+    else if (error?.response?.status === 429) {
+      message = "Too many requests right now. Please wait a few seconds and try again."
+    }
     else if (error?.response?.status === 409) {
       message = error?.response?.data?.message || "This account is currently in use on another device."
       sessionInUseMessage.value = message
@@ -354,7 +379,7 @@ const login = async () => {
     else if (error?.message) message = error.message
 
     if (error?.response?.status !== 409) {
-      Toastify({ text: message, backgroundColor: "#e74c3c" }).showToast()
+      showLoginToast(message)
     }
   } finally {
     loading.value = false
@@ -371,7 +396,7 @@ async function confirmCompanyVerification() {
   const normalizedEmail = email.value.trim()
   const code = verificationCode.value.trim()
   if (!code) {
-    Toastify({ text: "Please enter the verification code.", backgroundColor: "#e74c3c" }).showToast()
+    showLoginToast("Please enter the verification code.")
     return
   }
 
@@ -397,7 +422,7 @@ async function confirmCompanyVerification() {
       showCompanyVerificationModal.value = false
     } else {
       const message = error?.response?.data?.message || "Verification failed"
-      Toastify({ text: message, backgroundColor: "#e74c3c" }).showToast()
+      showLoginToast(message)
     }
   } finally {
     verificationLoading.value = false

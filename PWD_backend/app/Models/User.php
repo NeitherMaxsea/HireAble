@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class User extends Authenticatable
 {
@@ -24,6 +25,9 @@ class User extends Authenticatable
         'password',
         'role',
         'status',
+        'review_rejection_reason',
+        'reviewed_at',
+        'reviewed_by_email',
         'is_active',
         'contact',
         'disability',
@@ -69,7 +73,13 @@ class User extends Authenticatable
         'onboarding_data' => 'array',
         'last_login_at' => 'datetime',
         'last_logout_at' => 'datetime',
+        'reviewed_at' => 'datetime',
         'password_reset_requested_at' => 'datetime',
         'session_last_seen_at' => 'datetime',
     ];
+
+    public function applicantProfile(): HasOne
+    {
+        return $this->hasOne(ApplicantProfile::class, 'user_id');
+    }
 }

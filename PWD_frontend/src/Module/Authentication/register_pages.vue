@@ -27,23 +27,23 @@
           </span>
         </p>
 
-        <div class="form-group">
-          <label>Username</label>
-          <div class="input-wrapper icon-group">
-            <i class="bi bi-person-fill input-icon"></i>
-            <input type="text" v-model="username" placeholder="Enter username" autocomplete="username" />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Email</label>
-          <div class="input-wrapper icon-group">
-            <i class="bi bi-envelope-fill input-icon"></i>
-            <input type="email" v-model="email" placeholder="Enter email" autocomplete="email" />
-          </div>
-        </div>
-
         <template v-if="isEmployerRegistration">
+          <div class="form-group">
+            <label>Username</label>
+            <div class="input-wrapper icon-group">
+              <i class="bi bi-person-fill input-icon"></i>
+              <input type="text" v-model="username" placeholder="Enter username" autocomplete="username" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Email</label>
+            <div class="input-wrapper icon-group">
+              <i class="bi bi-envelope-fill input-icon"></i>
+              <input type="email" v-model="email" placeholder="Enter email" autocomplete="email" />
+            </div>
+          </div>
+
           <div class="form-group">
             <label>Company Name</label>
             <div class="input-wrapper icon-group">
@@ -67,41 +67,194 @@
               <input type="text" v-model="companyIndustry" placeholder="Enter company industry" />
             </div>
           </div>
+
+          <div class="form-group password-group">
+            <label>Password *</label>
+            <div class="password-wrapper icon-group">
+              <i class="bi bi-lock-fill input-icon"></i>
+              <input
+                :type="showPassword ? 'text' : 'password'"
+                v-model="password"
+                placeholder="Enter password"
+                autocomplete="new-password"
+              />
+              <span v-if="password" class="toggle-eye" @click="togglePassword">
+                <i :class="showPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
+              </span>
+            </div>
+          </div>
+
+          <div class="form-group password-group">
+            <label>Confirm Password *</label>
+            <div class="password-wrapper icon-group">
+              <i class="bi bi-shield-lock-fill input-icon"></i>
+              <input
+                :type="showConfirmPassword ? 'text' : 'password'"
+                v-model="confirmPassword"
+                placeholder="Confirm password"
+                autocomplete="new-password"
+              />
+              <span v-if="confirmPassword" class="toggle-eye" @click="toggleConfirmPassword">
+                <i :class="showConfirmPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
+              </span>
+            </div>
+          </div>
         </template>
 
-        <div class="form-group password-group">
-          <label>Password</label>
-          <div class="password-wrapper icon-group">
-            <i class="bi bi-lock-fill input-icon"></i>
-            <input
-              :type="showPassword ? 'text' : 'password'"
-              v-model="password"
-              placeholder="Enter password"
-              autocomplete="new-password"
-            />
-            <span v-if="password" class="toggle-eye" @click="togglePassword">
-              <i :class="showPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
-            </span>
+        <template v-else>
+          <div class="register-stepper">
+            <div
+              v-for="(label, idx) in applicantStepLabels"
+              :key="label"
+              class="register-step-item"
+              :class="{ active: applicantStep === idx + 1, done: applicantStep > idx + 1 }"
+            >
+              <span class="register-step-dot">{{ idx + 1 }}</span>
+              <span class="register-step-text">{{ label }}</span>
+            </div>
           </div>
-        </div>
 
-        <div class="form-group password-group">
-          <label>Confirm Password</label>
-          <div class="password-wrapper icon-group">
-            <i class="bi bi-shield-lock-fill input-icon"></i>
-            <input
-              :type="showConfirmPassword ? 'text' : 'password'"
-              v-model="confirmPassword"
-              placeholder="Confirm password"
-              autocomplete="new-password"
-            />
-            <span v-if="confirmPassword" class="toggle-eye" @click="toggleConfirmPassword">
-              <i :class="showConfirmPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
-            </span>
+          <div class="register-step-panel">
+            <transition name="step-overlay-fade">
+              <div v-if="stepAdvanceLoading" class="step-advance-overlay" aria-live="polite" aria-busy="true">
+                <div class="step-advance-box">
+                  <span class="step-advance-spinner" aria-hidden="true"></span>
+                  <p>{{ stepAdvanceMessage }}</p>
+                </div>
+              </div>
+            </transition>
+            <template v-if="applicantStep === 1">
+              <div class="applicant-grid">
+                <div class="form-group">
+                  <label>First Name *</label>
+                  <input type="text" v-model="firstName" placeholder="First name" />
+                </div>
+                <div class="form-group">
+                  <label>Last Name *</label>
+                  <input type="text" v-model="lastName" placeholder="Last name" />
+                </div>
+                <div class="form-group">
+                  <label>Sex at Birth *</label>
+                  <select v-model="sexAtBirth">
+                    <option value="">Select</option>
+                    <option>Male</option>
+                    <option>Female</option>
+                    <option>Prefer not to say</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Date of Birth *</label>
+                  <input type="date" v-model="birthDate" />
+                </div>
+                <div class="form-group form-group-full">
+                  <label>Disability *</label>
+                  <select v-model="pwdCategory">
+                    <option value="">Select disability</option>
+                    <option v-for="option in disabilityOptions" :key="option" :value="option">{{ option }}</option>
+                  </select>
+                </div>
+                <div class="form-group form-group-full">
+                  <label>Academic Level *</label>
+                  <select v-model="academicLevel">
+                    <option value="">Select</option>
+                    <option>Elementary</option>
+                    <option>Junior High School</option>
+                    <option>Senior High School</option>
+                    <option>Vocational / TESDA</option>
+                    <option>College Undergraduate</option>
+                    <option>College Graduate</option>
+                    <option>Postgraduate</option>
+                  </select>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="applicantStep === 2">
+              <div class="applicant-grid">
+                <div class="form-group form-group-full">
+                  <label>Mobile Number *</label>
+                  <input type="text" v-model="mobileNumber" placeholder="09XXXXXXXXX" />
+                </div>
+                <div class="form-group form-group-full">
+                  <label>PWD ID Number *</label>
+                  <input type="text" v-model="pwdIdNumber" placeholder="Enter your PWD ID number" />
+                </div>
+                <div class="form-group form-group-full">
+                  <label>PWD ID Image *</label>
+                  <input ref="pwdIdImageInput" type="file" accept="image/*" class="hidden-file" @change="onPwdIdImageSelected" />
+                  <button class="upload-btn" type="button" @click="$refs.pwdIdImageInput.click()" :disabled="uploadBusy">
+                    {{ uploadBusy ? "Uploading..." : "Upload PWD ID Image" }}
+                  </button>
+                  <div v-if="pwdIdImageUrl" class="upload-preview">
+                    <img :src="pwdIdImageUrl" alt="PWD ID preview" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="form-group">
+                <label>Username *</label>
+                <div class="input-wrapper icon-group">
+                  <i class="bi bi-person-fill input-icon"></i>
+                  <input type="text" v-model="username" placeholder="Enter username" autocomplete="username" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Email *</label>
+                <div class="input-wrapper icon-group">
+                  <i class="bi bi-envelope-fill input-icon"></i>
+                  <input type="email" v-model="email" placeholder="Enter email" autocomplete="email" />
+                </div>
+              </div>
+
+              <div class="form-group password-group">
+                <label>Password *</label>
+                <div class="password-wrapper icon-group">
+                  <i class="bi bi-lock-fill input-icon"></i>
+                  <input
+                    :type="showPassword ? 'text' : 'password'"
+                    v-model="password"
+                    placeholder="Enter password"
+                    autocomplete="new-password"
+                  />
+                  <span v-if="password" class="toggle-eye" @click="togglePassword">
+                    <i :class="showPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
+                  </span>
+                </div>
+              </div>
+
+              <div class="form-group password-group">
+                <label>Confirm Password *</label>
+                <div class="password-wrapper icon-group">
+                  <i class="bi bi-shield-lock-fill input-icon"></i>
+                  <input
+                    :type="showConfirmPassword ? 'text' : 'password'"
+                    v-model="confirmPassword"
+                    placeholder="Confirm password"
+                    autocomplete="new-password"
+                  />
+                  <span v-if="confirmPassword" class="toggle-eye" @click="toggleConfirmPassword">
+                    <i :class="showConfirmPassword ? 'bi bi-eye-slash-fill' : 'bi bi-eye-fill'"></i>
+                  </span>
+                </div>
+              </div>
+            </template>
           </div>
-        </div>
 
-        <div class="rules">
+          <div class="step-actions">
+            <button v-if="applicantStep > 1" type="button" class="btn btn-secondary" @click="prevApplicantStep" :disabled="stepAdvanceLoading">
+              Back
+            </button>
+            <button v-if="applicantStep < 3" type="button" class="btn" @click="nextApplicantStep" :disabled="stepAdvanceLoading">
+              <span v-if="stepAdvanceLoading"><i class="bi bi-hourglass-split"></i> Loading...</span>
+              <span v-else>Next</span>
+            </button>
+          </div>
+        </template>
+
+        <div v-if="isEmployerRegistration || applicantStep === 3" class="rules">
           <strong>Your password must contain:</strong>
           <ul>
             <li :class="{ valid: rules.length }">At least 8 characters</li>
@@ -119,7 +272,12 @@
           </ul>
         </div>
 
-        <button class="btn" @click="register" :disabled="loading">
+        <button
+          v-if="isEmployerRegistration || applicantStep === 3"
+          class="btn"
+          @click="register"
+          :disabled="loading || (isApplicantRegistration && applicantStep !== 3)"
+        >
           <span v-if="loading"><i class="bi bi-hourglass-split"></i> Creating account...</span>
           <span v-else><i class="bi bi-person-plus-fill"></i> Register</span>
         </button>
@@ -143,8 +301,34 @@ export default {
 
   data() {
     return {
+      applicantStep: 1,
       username: "",
       email: "",
+      firstName: "",
+      lastName: "",
+      sexAtBirth: "",
+      birthDate: "",
+      academicLevel: "",
+      addressProvince: "",
+      addressCity: "",
+      mobileNumber: "",
+      salaryMin: "",
+      salaryMax: "",
+      pwdCategory: "",
+      preferredRole: "",
+      yearsExperience: "",
+      preferredProvince: "",
+      preferredCity: "",
+      workMode: "",
+      profileSummary: "",
+      pwdIdNumber: "",
+      profilePictureUrl: "",
+      profilePicturePath: "",
+      pwdIdImageUrl: "",
+      pwdIdImagePath: "",
+      uploadBusy: false,
+      stepAdvanceLoading: false,
+      stepAdvanceMessage: "",
       companyName: "",
       companyAddress: "",
       companyIndustry: "",
@@ -155,10 +339,27 @@ export default {
       loading: false,
       selectedRole: "",
       isVisible: false,
+      disabilityOptions: [
+        "Deaf or Hard of Hearing",
+        "Visual Disability (Blind / Low Vision)",
+        "Mobility / Orthopedic Disability",
+        "Physical Disability",
+        "Speech and Language Impairment",
+        "Intellectual Disability",
+        "Learning Disability",
+        "Psychosocial Disability",
+        "Neurological Disability",
+        "Multiple Disabilities",
+        "Chronic Illness / Invisible Disability",
+        "Others",
+      ],
     };
   },
 
   mounted() {
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
     const queryRole = String(this.$route.query?.role || "")
       .trim()
       .toLowerCase();
@@ -177,9 +378,17 @@ export default {
     });
   },
 
+  beforeUnmount() {
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+  },
+
   computed: {
     isEmployerRegistration() {
       return String(this.selectedRole || "").toLowerCase() === "employer";
+    },
+    isApplicantRegistration() {
+      return !this.isEmployerRegistration;
     },
 
     roleLabel() {
@@ -222,6 +431,9 @@ export default {
     allValid() {
       return Object.values(this.rules).every(Boolean);
     },
+    applicantStepLabels() {
+      return ["Basic Information", "PWD Verification", "Account Creation"];
+    },
   },
 
   methods: {
@@ -233,7 +445,98 @@ export default {
       this.showConfirmPassword = !this.showConfirmPassword;
     },
 
+    async nextApplicantStep() {
+      if (!this.validateApplicantStep(this.applicantStep)) return;
+      if (this.applicantStep >= 3 || this.stepAdvanceLoading) return;
+      const nextStep = this.applicantStep + 1;
+      this.stepAdvanceMessage = `You are proceeding to Step ${nextStep}...`;
+      this.stepAdvanceLoading = true;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        this.applicantStep = nextStep;
+      } finally {
+        this.stepAdvanceLoading = false;
+        this.stepAdvanceMessage = "";
+      }
+    },
+
+    prevApplicantStep() {
+      if (this.applicantStep > 1) this.applicantStep -= 1;
+    },
+
+    validateApplicantStep(step) {
+      if (!this.isApplicantRegistration) return true;
+      if (step === 1) {
+        if (
+          !this.firstName.trim() ||
+          !this.lastName.trim() ||
+          !this.sexAtBirth ||
+          !this.birthDate ||
+          !this.pwdCategory ||
+          !this.academicLevel
+        ) {
+          Toastify({ text: "Please complete all required fields in Basic Information.", backgroundColor: "#e74c3c" }).showToast();
+          return false;
+        }
+      }
+      if (step === 2) {
+        if (
+          !this.mobileNumber.trim() ||
+          !this.pwdIdNumber.trim() ||
+          !this.pwdIdImageUrl
+        ) {
+          Toastify({ text: "Please complete disability/contact details and upload required images.", backgroundColor: "#e74c3c" }).showToast();
+          return false;
+        }
+      }
+      return true;
+    },
+
+    async uploadApplicantImage(file, target) {
+      if (!file) return;
+      if (!String(file.type || "").startsWith("image/")) {
+        Toastify({ text: "Please upload an image file.", backgroundColor: "#e74c3c" }).showToast();
+        return;
+      }
+      this.uploadBusy = true;
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
+        const res = await api.post("/uploads", formData);
+        const url = String(res?.data?.url || "").trim();
+        const path = String(res?.data?.path || "").trim();
+        if (!url) throw new Error("Upload failed");
+        if (target === "profile") {
+          this.profilePictureUrl = url;
+          this.profilePicturePath = path;
+        } else {
+          this.pwdIdImageUrl = url;
+          this.pwdIdImagePath = path;
+        }
+        Toastify({ text: "Image uploaded successfully.", backgroundColor: "#2ecc71" }).showToast();
+      } catch (error) {
+        Toastify({ text: error?.response?.data?.message || "Image upload failed.", backgroundColor: "#e74c3c" }).showToast();
+      } finally {
+        this.uploadBusy = false;
+      }
+    },
+
+    async onProfileImageSelected(event) {
+      const file = event.target.files?.[0];
+      await this.uploadApplicantImage(file, "profile");
+      event.target.value = "";
+    },
+
+    async onPwdIdImageSelected(event) {
+      const file = event.target.files?.[0];
+      await this.uploadApplicantImage(file, "pwd");
+      event.target.value = "";
+    },
+
     async register() {
+      if (this.isApplicantRegistration) {
+        if (!this.validateApplicantStep(1) || !this.validateApplicantStep(2)) return;
+      }
       if (!this.allValid) {
         Toastify({
           text: "Please meet all password requirements",
@@ -248,11 +551,49 @@ export default {
           ? "company_admin"
           : this.selectedRole;
 
+        const applicantDisplayName = [this.firstName.trim(), this.lastName.trim()].filter(Boolean).join(" ");
+        const finalName = this.isApplicantRegistration
+          ? (applicantDisplayName || this.username.trim())
+          : this.username.trim();
+
+        const onboardingData = this.isApplicantRegistration
+          ? {
+              firstName: this.firstName.trim(),
+              lastName: this.lastName.trim(),
+              sexAtBirth: this.sexAtBirth,
+              birthDate: this.birthDate,
+              academicLevel: this.academicLevel,
+              mobileNumber: this.mobileNumber.trim(),
+              salaryMin: this.salaryMin,
+              salaryMax: this.salaryMax,
+              pwdCategory: this.pwdCategory,
+              preferredRole: this.preferredRole,
+              yearsExperience: this.yearsExperience,
+              preferredProvince: this.preferredProvince.trim(),
+              preferredCity: this.preferredCity.trim(),
+              workMode: this.workMode,
+              profileSummary: this.profileSummary.trim(),
+              pwdIdNumber: this.pwdIdNumber.trim(),
+              profilePictureUrl: this.profilePictureUrl,
+              profilePicturePath: this.profilePicturePath,
+              pwdIdImageUrl: this.pwdIdImageUrl,
+              pwdIdImagePath: this.pwdIdImagePath,
+              username: this.username.trim(),
+              email: this.email.trim().toLowerCase(),
+            }
+          : null;
+
         const res = await api.post("/auth/register", {
-          name: this.username.trim(),
+          name: finalName,
+          username: this.username.trim(),
           email: this.email.trim().toLowerCase(),
           password: this.password,
           role: normalizedRole,
+          contact: this.isApplicantRegistration ? this.mobileNumber.trim() : null,
+          disability: this.isApplicantRegistration ? this.pwdCategory : null,
+          photoURL: this.isApplicantRegistration ? this.profilePictureUrl : null,
+          photoPath: this.isApplicantRegistration ? this.profilePicturePath : null,
+          onboardingData,
           companyName: this.isEmployerRegistration
             ? this.companyName.trim()
             : null,
@@ -267,21 +608,20 @@ export default {
         const normalizedEmail = this.email.trim().toLowerCase();
         localStorage.removeItem("selectedRole");
         localStorage.setItem("pendingOtpEmail", normalizedEmail);
-        if (!this.isEmployerRegistration) {
-          localStorage.setItem("newApplicantNeedsProfileFill", normalizedEmail);
-        } else {
-          localStorage.removeItem("newApplicantNeedsProfileFill");
-        }
-        const otpSent = res?.data?.otpSent !== false;
-        const otpRequired = res?.data?.otpRequired !== false;
-        Toastify({
-          text: !otpRequired
-            ? "Registration successful. Test account created without OTP."
-            : otpSent
-            ? "Registration successful. OTP sent to your email."
-            : "Registered, but OTP was not sent. Please resend OTP.",
-          backgroundColor: !otpRequired || otpSent ? "#2ecc71" : "#f59e0b",
-        }).showToast();
+        localStorage.removeItem("newApplicantNeedsProfileFill");
+            const otpSent = res?.data?.otpSent !== false;
+            const otpRequired = res?.data?.otpRequired !== false;
+            Toastify({
+              text: !otpRequired
+                ? "Registration submitted successfully."
+                : otpSent
+                  ? "Registration submitted. OTP sent to your email for verification."
+                  : "Registered, but OTP was not sent. Please resend OTP.",
+              backgroundColor: !otpRequired || otpSent ? "#2ecc71" : "#f59e0b",
+              duration: 5000,
+              close: false,
+              style: { "--toast-duration": "5000ms" },
+            }).showToast();
         if (!otpRequired) {
           this.$router.replace({ path: "/login", query: { force: "1" } });
           return;
@@ -314,7 +654,7 @@ export default {
 <style scoped>
 .auth-page {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
   padding: 64px 18px 36px;
   display: flex;
   align-items: flex-start;
@@ -442,6 +782,167 @@ export default {
   margin-bottom: 16px;
 }
 
+.register-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 12px;
+  align-items: start;
+}
+
+.register-step-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 0;
+  background: transparent;
+  border: 0;
+  text-align: center;
+}
+
+.register-step-item::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: calc(-50% + 16px);
+  width: calc(100% - 12px);
+  height: 2px;
+  background: #dbe2ea;
+  z-index: 0;
+}
+
+.register-step-item:first-child::before {
+  display: none;
+}
+
+.register-step-item.done::before {
+  background: #16a34a;
+}
+
+.register-step-dot {
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  background: #e2e8f0;
+  color: #334155;
+  border: 2px solid #e2e8f0;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.register-step-item.active .register-step-dot {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+  transform: scale(1.05);
+  box-shadow: 0 0 0 5px rgba(21, 128, 61, 0.12);
+}
+
+.register-step-item.done .register-step-dot {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+
+.register-step-text {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #334155;
+  line-height: 1.25;
+}
+
+.register-step-item.active .register-step-text {
+  color: #14532d;
+}
+
+.step-caption {
+  margin: 0 0 10px;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.register-step-panel {
+  position: relative;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fbfdff;
+  padding: 12px;
+}
+
+.step-overlay-fade-enter-active,
+.step-overlay-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.step-overlay-fade-enter-from,
+.step-overlay-fade-leave-to {
+  opacity: 0;
+}
+
+.step-advance-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.step-advance-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 122, 63, 0.2);
+  background: #ffffff;
+  color: #14532d;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(15, 79, 37, 0.12);
+}
+
+.step-advance-box p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.step-advance-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(21, 128, 61, 0.2);
+  border-top-color: #15803d;
+  animation: stepAdvanceSpin 0.75s linear infinite;
+}
+
+@keyframes stepAdvanceSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.applicant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.form-group-full {
+  grid-column: 1 / -1;
+}
+
 .role-label {
   font-weight: 700;
   text-transform: capitalize;
@@ -467,6 +968,83 @@ export default {
   font-size: 0.77rem;
   font-weight: 700;
   letter-spacing: 0.2px;
+}
+
+.form-group > input,
+.form-group > select,
+.form-group > textarea {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #d4dde7;
+  border-radius: 11px;
+  background: #f9fbfd;
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 10px 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.form-group > textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.form-group > input:focus,
+.form-group > select:focus,
+.form-group > textarea:focus {
+  outline: none;
+  border-color: #1f7a3f;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(31, 122, 63, 0.14);
+}
+
+.hidden-file {
+  display: none;
+}
+
+.upload-btn {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px dashed #bcd2c3;
+  background: #f7fbf8;
+  color: #14532d;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.upload-btn:hover:not(:disabled) {
+  border-color: #8fc3a3;
+  background: #f0faf3;
+}
+
+.upload-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.upload-preview {
+  margin-top: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #dde7f0;
+  background: #fff;
+}
+
+.upload-preview img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+
+.step-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .icon-group {
@@ -626,6 +1204,18 @@ export default {
   box-shadow: none;
 }
 
+.btn-secondary {
+  background: #e2e8f0;
+  color: #334155;
+  box-shadow: none;
+}
+
+.btn-secondary:hover {
+  background: #cbd5e1;
+  box-shadow: none;
+  filter: none;
+}
+
 .auth-link {
   margin-top: 12px;
   text-align: center;
@@ -695,6 +1285,15 @@ input[type="password"]::-ms-clear {
 
   .right {
     padding: 30px 22px 24px;
+  }
+  .applicant-grid {
+    grid-template-columns: 1fr;
+  }
+  .register-stepper {
+    gap: 6px;
+  }
+  .register-step-text {
+    font-size: 0.69rem;
   }
 }
 

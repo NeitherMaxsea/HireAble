@@ -800,13 +800,14 @@ function formatRelativeTime(timestampMillis) {
   display: flex;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .content {
   flex: 1;
   padding: 25px;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .right-panel {
@@ -814,7 +815,7 @@ function formatRelativeTime(timestampMillis) {
   border-left: 1px solid #e5e7eb;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
   padding: 20px 14px;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .widget-stack {

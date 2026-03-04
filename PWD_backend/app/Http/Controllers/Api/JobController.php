@@ -118,6 +118,10 @@ class JobController extends Controller
             'location' => $payload['location'] ?? null,
             'exact_address' => $payload['exactAddress'] ?? ($payload['exact_address'] ?? null),
             'type' => $payload['type'] ?? null,
+            'vacancies' => $this->normalizeVacancies(
+                $payload['vacancies'] ?? ($payload['slots'] ?? null),
+                $isCreate
+            ),
             'description' => $payload['description'] ?? null,
             'qualifications' => $payload['qualifications'] ?? null,
             'disability_type' => $payload['disabilityType'] ?? null,
@@ -180,12 +184,23 @@ class JobController extends Controller
 
     private function normalizeRow(object $row): array
     {
+        $status = (string) $this->rowValue($row, 'status', '');
+        $financeApprovalStatus = $this->resolvedFinanceApprovalStatus($row, $status);
+
         return [
             'id' => (string) $row->id,
             'title' => $this->rowValue($row, 'title'),
             'location' => $this->rowValue($row, 'location'),
             'exactAddress' => $this->rowValue($row, 'exact_address'),
             'type' => $this->rowValue($row, 'type'),
+            'vacancies' => $this->normalizeVacancies(
+                $this->rowValue($row, 'vacancies', $this->rowValue($row, 'slots', 1)),
+                true
+            ),
+            'slots' => $this->normalizeVacancies(
+                $this->rowValue($row, 'vacancies', $this->rowValue($row, 'slots', 1)),
+                true
+            ),
             'description' => $this->rowValue($row, 'description'),
             'qualifications' => $this->rowValue($row, 'qualifications'),
             'disabilityType' => $this->rowValue($row, 'disability_type'),
@@ -195,8 +210,8 @@ class JobController extends Controller
             'imageUrl' => $this->rowValue($row, 'image_url'),
             'imageUrl2' => $this->rowValue($row, 'image_url2'),
             'images' => $this->rowValue($row, 'images') ? json_decode((string) $this->rowValue($row, 'images'), true) : [],
-            'status' => $this->rowValue($row, 'status'),
-            'financeApprovalStatus' => $this->rowValue($row, 'finance_approval_status', 'pending'),
+            'status' => $status,
+            'financeApprovalStatus' => $financeApprovalStatus,
             'financeApprovalNote' => $this->rowValue($row, 'finance_approval_note'),
             'financeRejectionReason' => $this->rowValue($row, 'finance_rejection_reason'),
             'financeReviewedByUid' => $this->rowValue($row, 'finance_reviewed_by_uid'),
@@ -214,6 +229,30 @@ class JobController extends Controller
             'createdAt' => $this->rowValue($row, 'created_at') ? (string) $this->rowValue($row, 'created_at') : null,
             'updatedAt' => $this->rowValue($row, 'updated_at') ? (string) $this->rowValue($row, 'updated_at') : null,
         ];
+    }
+
+    private function resolvedFinanceApprovalStatus(object $row, string $status = ''): string
+    {
+        $rawFinanceStatus = strtolower(trim((string) $this->rowValue($row, 'finance_approval_status', '')));
+        $normalizedStatus = strtolower(trim($status));
+
+        // If finance_approval_status column is missing or stale, infer from the actual job status.
+        if ($normalizedStatus === 'open' || $normalizedStatus === 'closed') {
+            return 'approved';
+        }
+        if ($normalizedStatus === 'finance_rejected') {
+            return 'rejected';
+        }
+
+        if (in_array($rawFinanceStatus, ['approved', 'rejected', 'pending'], true)) {
+            return $rawFinanceStatus;
+        }
+
+        if (str_contains($normalizedStatus, 'pending')) {
+            return 'pending';
+        }
+
+        return 'pending';
     }
 
     private function writeLog(string $eventType, string $account, string $details): void
@@ -256,5 +295,18 @@ class JobController extends Controller
     private function rowValue(object $row, string $key, mixed $default = null): mixed
     {
         return property_exists($row, $key) ? $row->{$key} : $default;
+    }
+
+    private function normalizeVacancies(mixed $raw, bool $isCreate): ?int
+    {
+        if ($raw === null || $raw === '') {
+            return $isCreate ? 1 : null;
+        }
+
+        $parsed = (int) $raw;
+        if ($parsed < 1) {
+            $parsed = 1;
+        }
+        return $parsed;
     }
 }

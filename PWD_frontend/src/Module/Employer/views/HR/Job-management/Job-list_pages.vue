@@ -7,14 +7,11 @@
 
           <!-- HEADER -->
           <div class="page-header">
-            <div>
-              <h2>Job Listings</h2>
-              <p class="subtitle">Browse and manage your posted jobs.</p>
-            </div>
-            <button class="backfill-btn" :disabled="backfilling" @click="backfillLegacyJobAccounts">
-              {{ backfilling ? "Fixing..." : "Fix Legacy Accounts" }}
-            </button>
+          <div>
+            <h2>Job Listings</h2>
+            <p class="subtitle">Browse and manage your posted jobs.</p>
           </div>
+        </div>
 
           <!-- SEARCH -->
           <input
@@ -24,6 +21,41 @@
             v-model="search"
           >
 
+          <div v-if="filteredJobs.length > 0" class="bulk-actions">
+            <button class="ghost-btn" type="button" @click="toggleSelectionMode">
+              {{ selectionMode ? "Done" : "Manage Jobs" }}
+            </button>
+
+            <template v-if="selectionMode">
+              <label class="bulk-check">
+                <input
+                  type="checkbox"
+                  :checked="isAllFilteredSelected"
+                  :disabled="deletingSelected"
+                  @change="toggleSelectAllFiltered"
+                >
+                <span>Select all</span>
+              </label>
+              <p class="bulk-meta">{{ selectedJobIds.length }} selected</p>
+              <button
+                class="ghost-btn"
+                type="button"
+                :disabled="selectedJobIds.length === 0 || deletingSelected"
+                @click="clearSelectedJobs"
+              >
+                Clear
+              </button>
+              <button
+                class="danger-soft-btn"
+                type="button"
+                :disabled="selectedJobIds.length === 0 || deletingSelected"
+                @click="deleteSelectedJobs"
+              >
+                {{ deletingSelected ? "Deleting..." : "Delete selected" }}
+              </button>
+            </template>
+          </div>
+
           <!-- JOB CARDS -->
           <div v-if="filteredJobs.length === 0" class="empty">
             No job posts yet.
@@ -32,10 +64,24 @@
           <div v-else class="job-grid">
             <div
               class="job-card"
+              :class="{ selected: isJobSelected(job.id) }"
               v-for="job in filteredJobs"
               :key="job.id"
               @click="openView(job)"
             >
+              <div v-if="selectionMode" class="card-check">
+                <label class="item-check">
+                  <input
+                    type="checkbox"
+                    :checked="isJobSelected(job.id)"
+                    :disabled="deletingSelected"
+                    @click.stop
+                    @change="toggleJobSelection(job.id)"
+                  >
+                  <span>Select</span>
+                </label>
+              </div>
+
               <!-- TOP ROW -->
               <div class="job-top">
                 <div class="location-map">
@@ -53,9 +99,9 @@
 
                 <span
                   class="badge"
-                  :class="job.status === 'open' ? 'open' : (job.status === 'pending_finance_review' ? 'pending' : 'closed')"
+                  :class="statusBadgeClass(job)"
                 >
-                  {{ job.status }}
+                  {{ statusLabel(job) }}
                 </span>
               </div>
 
@@ -71,34 +117,44 @@
 
                 <div class="actions">
                   <button class="view" type="button" @click.stop.prevent="openView(job)">
-                    View
+                    {{ isRejectedJob(job) ? "Review" : "View" }}
                   </button>
 
                   <button
-                    v-if="job.status === 'open'"
+                    v-if="isOpenJob(job)"
                     class="close"
                     type="button"
-                    :disabled="busyJobId === job.id"
+                    :disabled="busyJobId === job.id || deletingSelected"
                     @click.stop.prevent="closeJob(job)"
                   >
                     Close
                   </button>
 
                   <button
-                    v-else-if="job.status === 'closed'"
+                    v-else-if="isClosedJob(job)"
                     class="reopen"
                     type="button"
-                    :disabled="busyJobId === job.id"
+                    :disabled="busyJobId === job.id || deletingSelected"
                     @click.stop.prevent="reopenJob(job)"
                   >
                     Reopen
                   </button>
 
                   <button
+                    v-else-if="isRejectedJob(job)"
+                    class="appeal"
+                    type="button"
+                    :disabled="busyJobId === job.id || deletingSelected"
+                    @click.stop.prevent="openAppeal(job)"
+                  >
+                    Revise & Appeal
+                  </button>
+
+                  <button
                     class="delete"
                     type="button"
-                    :disabled="busyJobId === job.id"
-                    @click.stop.prevent="deleteJob(job)"
+                    :disabled="busyJobId === job.id || deletingSelected"
+                    @click.stop.prevent="promptDeleteJob(job)"
                   >
                     Delete
                   </button>
@@ -214,79 +270,192 @@
         <div class="view-header">
           <div>
             <h3>{{ viewJobData.title || "Job Details" }}</h3>
-            <p class="subtitle">Review full job information</p>
+            <p class="subtitle">{{ isRejectedJob(viewJobData) ? "Finance rejection review" : "Review full job information" }}</p>
           </div>
           <button class="close-x" @click="showViewModal=false">Ã—</button>
         </div>
 
-        <div class="view-body">
-          <div class="detail-grid">
-            <div>
-              <h4>Location</h4>
-              <p>{{ viewJobData.location || "Not specified" }}</p>
+        <div v-if="isRejectedJob(viewJobData)" class="view-body view-body-pro review-focus-body">
+          <div class="review-focus-head">
+            <p class="review-focus-kicker">Finance Review Result</p>
+            <div class="review-focus-title-row">
+              <h4 class="review-focus-title">Rejected</h4>
+              <p class="status-pill rejected">rejected</p>
             </div>
-            <div>
-              <h4>Exact Address</h4>
-              <p>{{ viewJobData.exactAddress || "Not specified" }}</p>
+          </div>
+
+          <div class="review-reason-panel">
+            <p class="review-reason-label">Rejection Reason</p>
+            <p class="review-reason-text">{{ getRejectionReason(viewJobData) }}</p>
+          </div>
+
+          <div class="review-support-grid">
+            <div class="review-support-item">
+              <span>Finance Status</span>
+              <strong>{{ viewJobData.financeApprovalStatus || "pending" }}</strong>
             </div>
-            <div>
-              <h4>Type</h4>
-              <p>{{ viewJobData.type || "Open" }}</p>
+            <div class="review-support-item">
+              <span>Job Title</span>
+              <strong>{{ viewJobData.title || "Untitled job" }}</strong>
             </div>
-            <div>
-              <h4>Salary</h4>
-              <p>{{ viewJobData.salary || "Negotiable" }}</p>
+            <div class="review-support-item">
+              <span>Posted By</span>
+              <strong>{{ viewJobData.postedByName || viewJobData.postedByEmail || "N/A" }}</strong>
             </div>
-            <div>
-              <h4>Status</h4>
-              <p class="status-pill" :class="viewJobData.status === 'open' ? 'open' : 'closed'">
-                {{ viewJobData.status || "open" }}
+            <div class="review-support-item">
+              <span>Location</span>
+              <strong>{{ viewJobData.location || "Not specified" }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="view-body view-body-pro">
+          <div class="view-summary-card">
+            <div class="view-summary-top">
+              <div>
+                <p class="view-summary-label">Job Overview</p>
+                <h4 class="view-summary-title">{{ viewJobData.title || "Untitled Job" }}</h4>
+                <p class="view-summary-subtitle">{{ viewJobData.companyName || "Company not specified" }}</p>
+              </div>
+              <p
+                class="status-pill"
+                :class="statusBadgeClass(viewJobData)"
+              >
+                {{ statusLabel(viewJobData) }}
               </p>
             </div>
+
+            <div class="view-chip-row">
+              <span class="detail-chip"><strong>Location:</strong> {{ viewJobData.location || "Not specified" }}</span>
+              <span class="detail-chip"><strong>Type:</strong> {{ viewJobData.type || "Open" }}</span>
+              <span class="detail-chip"><strong>Vacancies:</strong> {{ viewJobData.vacancies || viewJobData.slots || 1 }}</span>
+              <span class="detail-chip"><strong>Salary:</strong> {{ viewJobData.salary || "Negotiable" }}</span>
+              <span class="detail-chip"><strong>Disability:</strong> {{ viewJobData.disabilityType || "Not specified" }}</span>
+            </div>
           </div>
 
-          <div class="detail-block">
-            <h4>Description</h4>
-            <p>{{ viewJobData.description || "No description provided." }}</p>
-          </div>
+          <div class="view-layout-grid">
+            <div class="view-main-stack">
+              <div class="detail-block">
+                <h4>Description</h4>
+                <p>{{ viewJobData.description || "No description provided." }}</p>
+              </div>
 
-          <div class="detail-block">
-            <h4>Map</h4>
-            <iframe
-              v-if="viewJobData.location"
-              :src="getMapUrl(viewJobData)"
-              loading="lazy"
-              referrerpolicy="no-referrer-when-downgrade"
-            ></iframe>
-            <p v-else class="map-empty">No location provided</p>
-          </div>
+              <div class="detail-block">
+                <h4>Qualifications</h4>
+                <ul v-if="toDetailList(viewJobData.qualifications).length" class="detail-list">
+                  <li v-for="(item, idx) in toDetailList(viewJobData.qualifications)" :key="`qual-${idx}`">
+                    {{ item }}
+                  </li>
+                </ul>
+                <p v-else>No qualifications provided.</p>
+              </div>
 
-          <div class="detail-block">
-            <h4>Photos</h4>
-            <div class="photo-grid">
-              <img
-                v-if="viewJobData.imageUrl"
-                :src="viewJobData.imageUrl"
-                alt="Job Photo 1"
-              />
-              <div v-else class="photo-placeholder">No photo</div>
+              <div class="detail-block">
+                <h4>Workplace Accommodations</h4>
+                <ul v-if="toDetailList(viewJobData.accommodations).length" class="detail-list">
+                  <li v-for="(item, idx) in toDetailList(viewJobData.accommodations)" :key="`acc-${idx}`">
+                    {{ item }}
+                  </li>
+                </ul>
+                <p v-else>No accommodations provided.</p>
+              </div>
 
-              <img
-                v-if="viewJobData.imageUrl2"
-                :src="viewJobData.imageUrl2"
-                alt="Job Photo 2"
-              />
-              <div v-else class="photo-placeholder">No photo</div>
+              <div class="detail-block">
+                <h4>Job Photos</h4>
+                <div class="photo-grid photo-grid-pro">
+                  <template v-if="viewJobData.imageUrl || viewJobData.imageUrl2">
+                    <div v-if="viewJobData.imageUrl" class="photo-card">
+                      <img :src="viewJobData.imageUrl" alt="Job Photo 1" />
+                      <span class="photo-caption">Photo 1</span>
+                    </div>
+                    <div v-else class="photo-placeholder">No photo 1</div>
+
+                    <div v-if="viewJobData.imageUrl2" class="photo-card">
+                      <img :src="viewJobData.imageUrl2" alt="Job Photo 2" />
+                      <span class="photo-caption">Photo 2</span>
+                    </div>
+                    <div v-else class="photo-placeholder">No photo 2</div>
+                  </template>
+                  <template v-else>
+                    <div class="photo-placeholder photo-placeholder-wide">No uploaded images for this job post</div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <div class="view-side-stack">
+              <div class="detail-block detail-card-compact">
+                <h4>Posting Information</h4>
+                <div class="detail-kv-list">
+                  <div class="detail-kv-item">
+                    <span>Exact Address</span>
+                    <strong>{{ viewJobData.exactAddress || "Not specified" }}</strong>
+                  </div>
+                  <div class="detail-kv-item">
+                    <span>Finance Status</span>
+                    <strong>{{ viewJobData.financeApprovalStatus || "pending" }}</strong>
+                  </div>
+                  <div class="detail-kv-item">
+                    <span>Posted By</span>
+                    <strong>{{ viewJobData.postedByName || viewJobData.postedByEmail || "N/A" }}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="detail-block detail-card-compact">
+                <h4>Map Location</h4>
+                <iframe
+                  v-if="viewJobData.location"
+                  :src="getMapUrl(viewJobData)"
+                  loading="lazy"
+                  referrerpolicy="no-referrer-when-downgrade"
+                ></iframe>
+                <p v-else class="map-empty">No location provided</p>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="modal-actions">
-          <button class="save" @click="openEditFromView">Edit</button>
+          <button class="save" @click="openEditFromView">{{ isRejectedJob(viewJobData) ? "Revise & Appeal" : "Edit" }}</button>
           <button class="cancel" @click="showViewModal=false">Close</button>
         </div>
       </div>
     </div>
+    </transition>
+
+    <transition name="modal-fade">
+      <div v-if="showDeleteConfirmModal" class="modal-overlay" @click="closeDeleteConfirm">
+        <div class="modal confirm-modal" @click.stop>
+          <div class="edit-header">
+            <div>
+              <h3>Delete Job Post</h3>
+              <p class="subtitle">This action cannot be undone.</p>
+            </div>
+            <button class="close-x" @click="closeDeleteConfirm">×</button>
+          </div>
+
+          <div class="view-body">
+            <p>
+              Are you sure you want to delete
+              <strong>{{ deleteTargetJob?.title || "this job" }}</strong>?
+            </p>
+          </div>
+
+          <div class="modal-actions">
+            <button class="cancel confirm-cancel-btn" type="button" @click="closeDeleteConfirm">Cancel</button>
+            <button
+              class="delete confirm-delete-btn"
+              type="button"
+              :disabled="busyJobId === (deleteTargetJob?.id || null) || deletingSelected"
+              @click="confirmDeleteJob"
+            >
+              {{ busyJobId === (deleteTargetJob?.id || null) ? "Deleting..." : "Delete" }}
+            </button>
+          </div>
+        </div>
+      </div>
     </transition>
 
   </div>
@@ -327,8 +496,15 @@ export default {
       search: "",
       backfilling: false,
       busyJobId: null,
+      selectedJobIds: [],
+      selectionMode: false,
+      deletingSelected: false,
+      showDeleteConfirmModal: false,
+      deleteTargetJob: null,
       showModal: false,
       editJobData: {},
+      isAppealEdit: false,
+      appealOriginalSnapshot: null,
       showViewModal: false,
       viewJobData: {},
       editImageFile1: null,
@@ -343,7 +519,11 @@ export default {
       return this.jobs.filter(job =>
         String(job?.title || "").toLowerCase().includes(this.search.toLowerCase())
       )
-    }
+    },
+    isAllFilteredSelected() {
+      if (this.filteredJobs.length === 0) return false
+      return this.filteredJobs.every((job) => this.selectedJobIds.includes(String(job?.id || "")))
+    },
   },
 
   async mounted() {
@@ -386,7 +566,15 @@ export default {
     async startJobsSync() {
       const actor = await this.resolveActorMeta()
       if (!actor?.uid) {
-        toast.error("Cannot load jobs. Please login again.")
+        // Auth state can be late after refresh; retry shortly before showing a hard failure.
+        setTimeout(async () => {
+          const retryActor = await this.resolveActorMeta()
+          if (!retryActor?.uid) {
+            toast.error("Cannot load jobs. Please login again.")
+            return
+          }
+          await this.loadJobs(retryActor)
+        }, 1200)
         return
       }
 
@@ -420,6 +608,12 @@ export default {
           })
           .sort((a, b) => Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || "")))
 
+        const validIds = new Set(this.jobs.map((job) => String(job?.id || "")).filter(Boolean))
+        this.selectedJobIds = this.selectedJobIds.filter((id) => validIds.has(id))
+        if (this.selectionMode && this.jobs.length === 0) {
+          this.selectionMode = false
+        }
+
         if (this.showViewModal && this.viewJobData?.id) {
           const fresh = this.jobs.find((job) => job.id === this.viewJobData.id)
           this.viewJobData = fresh ? { ...fresh } : {}
@@ -437,10 +631,12 @@ export default {
 
     async resolveActorMeta() {
       const user = await this.waitForAuthUser()
-      if (!user?.uid) return null
+      const fallbackUid = String(localStorage.getItem("userUid") || localStorage.getItem("uid") || "").trim()
+      const uid = String(user?.uid || fallbackUid).trim()
+      if (!uid) return null
 
       const email = String(
-        user.email || localStorage.getItem("userEmail") || ""
+        user?.email || localStorage.getItem("userEmail") || ""
       ).trim()
       const name = String(
         localStorage.getItem("userName") ||
@@ -452,7 +648,7 @@ export default {
 
       if (!email) return null
       return {
-        uid: user.uid,
+        uid,
         email,
         name,
         role,
@@ -507,11 +703,17 @@ export default {
 
     openEdit(job) {
       this.editJobData = { ...job }
+      this.isAppealEdit = this.isRejectedJob(job)
+      this.appealOriginalSnapshot = this.snapshotForAppeal(this.editJobData)
       this.editImageFile1 = null
       this.editImageFile2 = null
       this.editImagePreview1 = job.imageUrl || ""
       this.editImagePreview2 = job.imageUrl2 || ""
       this.showModal = true
+    },
+
+    openAppeal(job) {
+      this.openEdit(job)
     },
 
     openView(job) {
@@ -526,6 +728,74 @@ export default {
     openEditFromView() {
       this.showViewModal = false
       this.openEdit(this.viewJobData)
+    },
+
+    normalizeStatus(value) {
+      return String(value || "").trim().toLowerCase()
+    },
+
+    resolvedStatus(job) {
+      const status = this.normalizeStatus(job?.status)
+      const financeStatus = this.normalizeStatus(job?.financeApprovalStatus)
+      if (financeStatus === "rejected" || status === "finance_rejected" || status === "rejected") {
+        return "rejected"
+      }
+      if (status === "open") return "open"
+      if (status === "closed") return "closed"
+      if (status === "pending_finance_review" || financeStatus === "pending") return "pending_finance_review"
+      return status || "pending_finance_review"
+    },
+
+    statusLabel(job) {
+      const status = this.resolvedStatus(job)
+      if (status === "pending_finance_review") return "pending"
+      return status.replace(/_/g, " ")
+    },
+
+    statusBadgeClass(job) {
+      const status = this.resolvedStatus(job)
+      if (status === "open") return "open"
+      if (status === "pending_finance_review") return "pending"
+      if (status === "rejected") return "rejected"
+      return "closed"
+    },
+
+    isOpenJob(job) {
+      return this.resolvedStatus(job) === "open"
+    },
+
+    isClosedJob(job) {
+      return this.resolvedStatus(job) === "closed"
+    },
+
+    isRejectedJob(job) {
+      return this.resolvedStatus(job) === "rejected"
+    },
+
+    getRejectionReason(job) {
+      const reason = String(job?.financeRejectionReason || job?.financeApprovalNote || "").trim()
+      return reason || "No rejection reason provided by Finance."
+    },
+
+    snapshotForAppeal(job) {
+      return {
+        title: String(job?.title || "").trim(),
+        description: String(job?.description || "").trim(),
+        location: String(job?.location || "").trim(),
+        exactAddress: String(job?.exactAddress || "").trim(),
+        salary: String(job?.salary || "").trim(),
+        type: String(job?.type || "").trim(),
+        imageUrl: String(job?.imageUrl || "").trim(),
+        imageUrl2: String(job?.imageUrl2 || "").trim(),
+      }
+    },
+
+    hasAppealRevision() {
+      if (!this.isAppealEdit) return true
+      if (this.editImageFile1 || this.editImageFile2) return true
+      const current = this.snapshotForAppeal(this.editJobData)
+      const original = this.appealOriginalSnapshot || {}
+      return Object.keys(current).some((key) => current[key] !== String(original[key] || "").trim())
     },
 
     handleEditImage(e, slot) {
@@ -751,8 +1021,34 @@ export default {
       return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
     },
 
+    toDetailList(value) {
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item || "").trim()).filter(Boolean)
+      }
+
+      const text = String(value || "").trim()
+      if (!text) return []
+
+      if (text.startsWith("[") && text.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(text)
+          if (Array.isArray(parsed)) {
+            return parsed.map((item) => String(item || "").trim()).filter(Boolean)
+          }
+        } catch {
+          // fallback to text parsing below
+        }
+      }
+
+      return text
+        .split(/\r?\n|\u2022|;/g)
+        .map((item) => item.replace(/^\s*-\s*/, "").trim())
+        .filter(Boolean)
+    },
+
     async updateJob() {
       try {
+        const submittingAppeal = this.isAppealEdit
         let uploadFailed = false
 
         if (this.editImageFile1) {
@@ -789,7 +1085,12 @@ export default {
           return
         }
 
-        await api.put(`/jobs/${this.editJobData.id}`, {
+        if (submittingAppeal && !this.hasAppealRevision()) {
+          toast.warning("Please revise the rejected job post before submitting an appeal.")
+          return
+        }
+
+        const updatePayload = {
           title: this.editJobData.title,
           description: this.editJobData.description,
           location: this.editJobData.location,
@@ -799,14 +1100,27 @@ export default {
           imageUrl: this.editJobData.imageUrl || "",
           imageUrl2: this.editJobData.imageUrl2 || "",
           images: [this.editJobData.imageUrl, this.editJobData.imageUrl2].filter(Boolean)
-        })
+        }
+
+        if (submittingAppeal) {
+          updatePayload.status = "pending_finance_review"
+          updatePayload.financeApprovalStatus = "pending"
+          updatePayload.financeApprovalNote = "Appeal submitted by HR after revision."
+          updatePayload.financeRejectionReason = ""
+          updatePayload.financeReviewedAt = ""
+          updatePayload.publishedAt = ""
+        }
+
+        await api.put(`/jobs/${this.editJobData.id}`, updatePayload)
 
         this.showModal = false
+        this.isAppealEdit = false
+        this.appealOriginalSnapshot = null
         this.editImageFile1 = null
         this.editImageFile2 = null
         const actor = await this.resolveActorMeta()
         if (actor?.uid) await this.loadJobs(actor)
-        toast.success("Job updated successfully")
+        toast.success(submittingAppeal ? "Appeal submitted to Finance for re-review." : "Job updated successfully")
       } catch (err) {
         console.error(err)
         const message =
@@ -863,6 +1177,28 @@ export default {
       }
     },
 
+    promptDeleteJob(job) {
+      if (this.deletingSelected) return
+      const id = job?.id
+      if (!id) {
+        toast.error("Invalid job record.")
+        return
+      }
+      this.deleteTargetJob = job
+      this.showDeleteConfirmModal = true
+    },
+
+    closeDeleteConfirm(force = false) {
+      if ((this.busyJobId || this.deletingSelected) && !force) return
+      this.showDeleteConfirmModal = false
+      this.deleteTargetJob = null
+    },
+
+    async confirmDeleteJob() {
+      if (!this.deleteTargetJob) return
+      await this.deleteJob(this.deleteTargetJob)
+    },
+
     async deleteJob(job) {
       const id = job?.id
       if (!id) {
@@ -870,21 +1206,102 @@ export default {
         return
       }
 
-      if (!window.confirm("Delete this job?")) return
-
       this.busyJobId = id
       try {
         await api.delete(`/jobs/${id}`)
         const actor = await this.resolveActorMeta()
         if (actor?.uid) await this.loadJobs(actor)
         toast.success("Job deleted.")
+        this.closeDeleteConfirm(true)
       } catch (err) {
         console.error(err)
         toast.error(err?.message || "Failed to delete job.")
       } finally {
+        this.selectedJobIds = this.selectedJobIds.filter((jobId) => jobId !== String(id))
         this.busyJobId = null
       }
-    }
+    },
+
+    toggleSelectionMode() {
+      this.selectionMode = !this.selectionMode
+      if (!this.selectionMode) {
+        this.selectedJobIds = []
+      }
+    },
+
+    isJobSelected(jobId) {
+      return this.selectedJobIds.includes(String(jobId || ""))
+    },
+
+    toggleJobSelection(jobId) {
+      const id = String(jobId || "")
+      if (!id || this.deletingSelected) return
+      if (this.selectedJobIds.includes(id)) {
+        this.selectedJobIds = this.selectedJobIds.filter((item) => item !== id)
+      } else {
+        this.selectedJobIds = [...this.selectedJobIds, id]
+      }
+    },
+
+    toggleSelectAllFiltered(event) {
+      if (this.deletingSelected) return
+      const checked = Boolean(event?.target?.checked)
+      const filteredIds = this.filteredJobs.map((job) => String(job?.id || "")).filter(Boolean)
+      if (!checked) {
+        this.selectedJobIds = this.selectedJobIds.filter((id) => !filteredIds.includes(id))
+        return
+      }
+      const merged = new Set(this.selectedJobIds)
+      filteredIds.forEach((id) => merged.add(id))
+      this.selectedJobIds = Array.from(merged)
+    },
+
+    clearSelectedJobs() {
+      this.selectedJobIds = []
+    },
+
+    async deleteSelectedJobs() {
+      if (this.deletingSelected) return
+      const ids = this.selectedJobIds.filter((id) =>
+        this.jobs.some((job) => String(job?.id || "") === id)
+      )
+      if (!ids.length) {
+        toast.warning("No selected jobs to delete.")
+        return
+      }
+
+      this.deletingSelected = true
+      const failedIds = []
+      let successCount = 0
+      try {
+        for (const id of ids) {
+          try {
+            await api.delete(`/jobs/${id}`)
+            successCount += 1
+          } catch (err) {
+            console.error(err)
+            failedIds.push(id)
+          }
+        }
+
+        const actor = await this.resolveActorMeta()
+        if (actor?.uid) await this.loadJobs(actor)
+
+        if (successCount > 0) {
+          toast.success(`Deleted ${successCount} job post${successCount > 1 ? "s" : ""}.`)
+        }
+        if (failedIds.length > 0) {
+          toast.warning(`Failed to delete ${failedIds.length} job post${failedIds.length > 1 ? "s" : ""}.`)
+        }
+
+        this.selectedJobIds = failedIds
+        if (failedIds.length === 0) {
+          this.selectionMode = false
+        }
+      } finally {
+        this.deletingSelected = false
+      }
+    },
 
   }
 }
@@ -971,6 +1388,60 @@ export default {
   box-shadow:0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
+.bulk-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:16px;
+  padding:10px 12px;
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  background:#f8fafc;
+}
+
+.bulk-check{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:#334155;
+  font-size:13px;
+  font-weight:600;
+}
+
+.bulk-meta{
+  margin:0;
+  color:#64748b;
+  font-size:12px;
+  font-weight:600;
+}
+
+.ghost-btn,
+.danger-soft-btn{
+  border:none;
+  border-radius:10px;
+  padding:8px 12px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:600;
+}
+
+.ghost-btn{
+  background:#e2e8f0;
+  color:#0f172a;
+}
+
+.danger-soft-btn{
+  background:#7f1d1d;
+  color:#ffffff;
+}
+
+.ghost-btn:disabled,
+.danger-soft-btn:disabled{
+  opacity:.65;
+  cursor:not-allowed;
+}
+
 /* GRID */
 .job-grid{
   display:grid;
@@ -989,6 +1460,11 @@ export default {
   position:relative;
   overflow:hidden;
   cursor:pointer;
+}
+
+.job-card.selected{
+  border-color:#7c3aed;
+  box-shadow:0 14px 26px rgba(124,58,237,.14);
 }
 
 .job-card:hover{
@@ -1044,6 +1520,19 @@ export default {
   pointer-events:none;
 }
 
+.card-check{
+  margin-bottom:8px;
+}
+
+.item-check{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#334155;
+  font-size:12px;
+  font-weight:600;
+}
+
 .location-label{
   position:absolute;
   left:8px;
@@ -1097,6 +1586,11 @@ export default {
 }
 
 .closed{
+  background:#fee2e2;
+  color:#991b1b;
+}
+
+.rejected{
   background:#fee2e2;
   color:#991b1b;
 }
@@ -1167,6 +1661,7 @@ export default {
 .view{ background:linear-gradient(135deg, #0ea5e9, #0284c7); }
 .close{ background:linear-gradient(135deg, #ef4444, #b91c1c); }
 .reopen{ background:linear-gradient(135deg, #f59e0b, #d97706); }
+.appeal{ background:linear-gradient(135deg, #7c3aed, #5b21b6); }
 .delete{ background:linear-gradient(135deg, #7f1d1d, #4c0519); }
 
 .empty{
@@ -1287,6 +1782,174 @@ export default {
   gap:16px;
 }
 
+.view-body-pro{
+  gap:14px;
+}
+
+.review-focus-body{
+  gap:12px;
+}
+
+.review-focus-head{
+  border:1px solid #fecaca;
+  background:linear-gradient(180deg, #fff1f2 0%, #fee2e2 100%);
+  border-radius:14px;
+  padding:14px;
+}
+
+.review-focus-kicker{
+  margin:0;
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.7px;
+  color:#991b1b;
+}
+
+.review-focus-title-row{
+  margin-top:8px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.review-focus-title{
+  margin:0;
+  font-size:22px;
+  color:#7f1d1d;
+  line-height:1.2;
+}
+
+.review-reason-panel{
+  border:1px solid #ef4444;
+  background:#fff;
+  border-radius:14px;
+  padding:16px;
+  box-shadow:0 8px 22px rgba(127, 29, 29, 0.12);
+}
+
+.review-reason-label{
+  margin:0 0 8px;
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.7px;
+  color:#991b1b;
+  font-weight:700;
+}
+
+.review-reason-text{
+  margin:0;
+  color:#7f1d1d;
+  font-size:16px;
+  line-height:1.6;
+  font-weight:600;
+  white-space:pre-wrap;
+}
+
+.review-support-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+
+.review-support-item{
+  border:1px solid #e5e7eb;
+  background:#f8fafc;
+  border-radius:10px;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.review-support-item span{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  color:#64748b;
+}
+
+.review-support-item strong{
+  font-size:13px;
+  color:#0f172a;
+  line-height:1.4;
+}
+
+.view-summary-card{
+  border:1px solid #dbeafe;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+  border-radius:14px;
+  padding:14px;
+}
+
+.view-summary-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.view-summary-label{
+  margin:0 0 4px;
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.7px;
+  color:#64748b;
+}
+
+.view-summary-title{
+  margin:0;
+  font-size:20px;
+  line-height:1.2;
+  color:#0f172a;
+}
+
+.view-summary-subtitle{
+  margin:4px 0 0;
+  color:#475569;
+  font-size:13px;
+}
+
+.view-chip-row{
+  margin-top:12px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.detail-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:7px 10px;
+  border-radius:999px;
+  border:1px solid #dbe2ea;
+  background:#ffffff;
+  color:#334155;
+  font-size:12px;
+}
+
+.detail-chip strong{
+  color:#0f172a;
+  font-weight:700;
+}
+
+.view-layout-grid{
+  display:grid;
+  grid-template-columns:minmax(0, 1.55fr) minmax(280px, .95fr);
+  gap:14px;
+  align-items:start;
+}
+
+.view-main-stack,
+.view-side-stack{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+
 .detail-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
@@ -1318,6 +1981,7 @@ export default {
   border:1px solid #e5e7eb;
   border-radius:12px;
   padding:12px;
+  box-shadow:0 4px 14px rgba(15, 23, 42, 0.04);
 }
 
 .detail-block iframe{
@@ -1339,6 +2003,21 @@ export default {
   border-radius:999px;
   font-size:12px;
   text-transform:capitalize;
+  font-weight:700;
+}
+
+.detail-list{
+  margin:0;
+  padding-left:18px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.detail-list li{
+  color:#334155;
+  font-size:14px;
+  line-height:1.45;
 }
 
 .photo-grid{
@@ -1347,12 +2026,33 @@ export default {
   gap:10px;
 }
 
+.photo-grid-pro{
+  grid-template-columns:1fr 1fr;
+}
+
+.photo-card{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
 .photo-grid img{
   width:100%;
   height:160px;
   object-fit:cover;
   border-radius:12px;
   border:1px solid #e5e7eb;
+}
+
+.photo-grid-pro img{
+  height:190px;
+  background:#f8fafc;
+}
+
+.photo-caption{
+  font-size:12px;
+  color:#64748b;
+  font-weight:600;
 }
 
 .photo-placeholder{
@@ -1365,6 +2065,48 @@ export default {
   color:#94a3b8;
   background:#f8fafc;
   font-size:12px;
+}
+
+.photo-placeholder-wide{
+  grid-column:1 / -1;
+  height:180px;
+}
+
+.detail-card-compact iframe{
+  height:240px;
+}
+
+.detail-kv-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.detail-kv-item{
+  border:1px solid #e5e7eb;
+  background:#f8fafc;
+  border-radius:10px;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.detail-kv-item span{
+  font-size:11px;
+  color:#64748b;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+}
+
+.detail-kv-item strong{
+  color:#0f172a;
+  font-size:13px;
+  line-height:1.35;
+}
+
+.detail-kv-item.rejection-reason strong{
+  color:#991b1b;
 }
 
 .modal input,
@@ -1389,6 +2131,52 @@ export default {
   display:flex;
   justify-content:flex-end;
   gap:10px;
+}
+
+.confirm-modal{
+  width:min(460px, 92vw);
+}
+
+.confirm-modal .modal-actions{
+  padding-top: 6px;
+}
+
+.confirm-cancel-btn{
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.confirm-cancel-btn:hover{
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.confirm-delete-btn{
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.2);
+}
+
+.confirm-delete-btn:hover{
+  filter: brightness(1.02);
+  transform: translateY(-1px);
+}
+
+.confirm-delete-btn:disabled,
+.confirm-cancel-btn:disabled{
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .save{
@@ -1445,6 +2233,22 @@ export default {
 }
 
 @media (max-width: 700px){
+  .view-layout-grid{
+    grid-template-columns:1fr;
+  }
+  .photo-grid-pro{
+    grid-template-columns:1fr;
+  }
+  .photo-placeholder-wide{
+    height:140px;
+  }
+  .view-summary-top{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .review-support-grid{
+    grid-template-columns:1fr;
+  }
   .edit-grid{
     grid-template-columns:1fr;
   }

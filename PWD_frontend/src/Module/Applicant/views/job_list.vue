@@ -114,6 +114,10 @@
               <i class="bi bi-geo-alt"></i>
               {{ job.location || "Not specified" }}
             </span>
+            <span class="meta-item">
+              <i class="bi bi-people"></i>
+              Vacancies: {{ job.vacancies }}
+            </span>
             <span class="pwd-pill">
               <i class="bi bi-universal-access"></i>
               {{ job.disabilityType || "PWD-friendly" }}
@@ -200,6 +204,13 @@
             </div>
           </div>
 
+          <div class="detail-section grid-2">
+            <div>
+              <h4>Vacancies</h4>
+              <p>{{ selectedJob.vacancies }}</p>
+            </div>
+          </div>
+
           <div class="detail-section">
             <h4>Description</h4>
             <p>{{ selectedJob.description || "No description provided." }}</p>
@@ -256,11 +267,11 @@
         <div class="detail-actions bottom">
           <button
             class="apply-btn"
-            :class="{ disabled: hasPendingApplication }"
-            :disabled="hasPendingApplication"
+            :class="{ disabled: hasExistingApplication }"
+            :disabled="hasExistingApplication"
             @click="applyJob"
           >
-            {{ hasPendingApplication ? "Pending" : "Apply for this Job" }}
+            {{ applicationButtonLabel }}
           </button>
         </div>
       </div>
@@ -316,7 +327,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, computed } from "vue"
 import { db } from "@/lib/client-platform"
-import { addDoc, collection, onSnapshot, query, serverTimestamp, where } from "@/lib/laravel-data"
+import { addDoc, collection, onSnapshot, serverTimestamp } from "@/lib/laravel-data"
 import Toastify from "toastify-js"
 import "toastify-js/src/toastify.css"
 
@@ -325,7 +336,7 @@ const isJobsLoading = ref(true)
 const selectedJob = ref(null)
 const applicantId = ref("")
 const applicantEmail = ref("")
-const appliedJobIds = ref(new Set())
+const applicationStatusByJob = ref({})
 const jobSearchKeyword = ref("")
 const jobDisabilityFilter = ref("all")
 const selectedSkills = ref([])
@@ -336,6 +347,7 @@ const currentPhotoIndex = ref(0)
 const isLightboxOpen = ref(false)
 let unsubscribeJobs = null
 let unsubscribeApplications = null
+let jobsLoadingWatchdog = null
 
 onMounted(() => {
   applicantId.value = String(
@@ -347,6 +359,10 @@ onMounted(() => {
   applicantEmail.value = String(localStorage.getItem("userEmail") || "")
     .trim()
     .toLowerCase()
+
+  jobsLoadingWatchdog = setTimeout(() => {
+    isJobsLoading.value = false
+  }, 15000)
 
   unsubscribeJobs = onSnapshot(collection(db, "jobs"), snapshot => {
     const list = snapshot.docs.map(d => ({
@@ -380,6 +396,7 @@ onMounted(() => {
             job.photo2 ||
             images[1] ||
             "",
+          vacancies: normalizeVacancies(job.vacancies ?? job.slots),
           statusNormalized: normalizeJobStatus(job.status),
           financeApprovalNormalized: normalizeFinanceApproval(job),
         }
@@ -391,49 +408,56 @@ onMounted(() => {
       selectedJob.value = jobs.value.find(j => j.id === selectedJob.value.id) || null
     }
     isJobsLoading.value = false
+    if (jobsLoadingWatchdog) {
+      clearTimeout(jobsLoadingWatchdog)
+      jobsLoadingWatchdog = null
+    }
   }, () => {
     jobs.value = []
     isJobsLoading.value = false
+    if (jobsLoadingWatchdog) {
+      clearTimeout(jobsLoadingWatchdog)
+      jobsLoadingWatchdog = null
+    }
   })
 
-  let appsTarget = collection(db, "applications")
-  if (applicantId.value) {
-    appsTarget = query(collection(db, "applications"), where("applicantId", "==", applicantId.value))
-  } else if (applicantEmail.value) {
-    appsTarget = query(collection(db, "applications"), where("applicantEmail", "==", applicantEmail.value))
-  }
-
-  unsubscribeApplications = onSnapshot(appsTarget, snapshot => {
-    const nextAppliedJobIds = new Set()
+  // Read once from applications collection and match by applicant ID OR email.
+  // This avoids missing pending records when older rows only have one identifier.
+  unsubscribeApplications = onSnapshot(collection(db, "applications"), snapshot => {
+    const nextStatusByJob = {}
 
     snapshot.docs.forEach((docSnap) => {
       const raw = docSnap.data() || {}
       const applicationJobId = String(raw.jobId || "").trim()
       const applicationApplicantId = String(raw.applicantId || "").trim()
       const applicationApplicantEmail = String(raw.applicantEmail || "").trim().toLowerCase()
+      const applicationStatus = String(raw.status || "pending").trim().toLowerCase()
 
       if (!applicationJobId) return
 
-      if (applicantId.value) {
-        if (applicationApplicantId !== applicantId.value) return
-      } else if (applicantEmail.value) {
-        if (applicationApplicantEmail !== applicantEmail.value) return
-      } else {
+      const hasIdMatch = applicantId.value && applicationApplicantId === applicantId.value
+      const hasEmailMatch = applicantEmail.value && applicationApplicantEmail === applicantEmail.value
+      if (!hasIdMatch && !hasEmailMatch) {
         return
       }
 
-      nextAppliedJobIds.add(applicationJobId)
+      // Keep the latest known status for this job application.
+      nextStatusByJob[applicationJobId] = applicationStatus || "pending"
     })
 
-    appliedJobIds.value = nextAppliedJobIds
+    applicationStatusByJob.value = nextStatusByJob
   }, () => {
-    appliedJobIds.value = new Set()
+    applicationStatusByJob.value = {}
   })
 
   runIntroSequence()
 })
 
 onBeforeUnmount(() => {
+  if (jobsLoadingWatchdog) {
+    clearTimeout(jobsLoadingWatchdog)
+    jobsLoadingWatchdog = null
+  }
   if (typeof unsubscribeJobs === "function") {
     unsubscribeJobs()
   }
@@ -457,6 +481,12 @@ const getCreatedAtMillis = (ts) => {
 }
 
 const normalizeJobStatus = (status) => String(status || "").trim().toLowerCase()
+
+const normalizeVacancies = (value) => {
+  const parsed = parseInt(String(value ?? "").trim(), 10)
+  if (!Number.isFinite(parsed) || parsed < 1) return 1
+  return parsed
+}
 
 const normalizeFinanceApproval = (job) => {
   const direct = String(job?.financeApprovalStatus || job?.finance_approval_status || "").trim().toLowerCase()
@@ -604,8 +634,22 @@ function hasSeenApplicantIntro() {
 function markApplicantIntroSeen() {
   try {
     localStorage.setItem(getApplicantIntroSeenKey(), "1")
+    localStorage.setItem("userIsFirstLogin", "false")
   } catch {
     // ignore localStorage errors
+  }
+}
+
+function readIsFirstLoginFlag() {
+  try {
+    const raw = localStorage.getItem("userIsFirstLogin")
+    if (raw == null) return null
+    const normalized = String(raw).trim().toLowerCase()
+    if (normalized === "true") return true
+    if (normalized === "false") return false
+    return null
+  } catch {
+    return null
   }
 }
 
@@ -657,7 +701,9 @@ function confirmSkillsSelection() {
 
 async function runIntroSequence() {
   loadSelectedSkills()
-  if (hasSeenApplicantIntro()) {
+  const isFirstLogin = readIsFirstLoginFlag()
+  const shouldSkipIntro = isFirstLogin === false || (isFirstLogin === null && hasSeenApplicantIntro())
+  if (shouldSkipIntro) {
     showWelcomeOverlay.value = false
     showSkillsOverlay.value = false
     return
@@ -697,10 +743,24 @@ const mapUrl = computed(() => {
   )}&output=embed`
 })
 
-const hasPendingApplication = computed(() => {
+const selectedJobApplicationStatus = computed(() => {
   const jobId = String(selectedJob.value?.id || "").trim()
-  if (!jobId) return false
-  return appliedJobIds.value.has(jobId)
+  if (!jobId) return ""
+  return String(applicationStatusByJob.value[jobId] || "").trim().toLowerCase()
+})
+
+const hasExistingApplication = computed(() => {
+  return !!selectedJobApplicationStatus.value
+})
+
+const applicationButtonLabel = computed(() => {
+  const status = selectedJobApplicationStatus.value
+  if (status === "pending") return "Pending"
+  if (status === "rejected") return "Rejected"
+  if (status === "accepted") return "Accepted"
+  if (status === "interviewed" || status === "interview") return "Interview"
+  if (status) return "Applied"
+  return "Apply for this Job"
 })
 
 const photoList = computed(() => {
@@ -745,22 +805,28 @@ const setPhoto = (idx) => {
   currentPhotoIndex.value = idx
 }
 
-const showToast = (text, backgroundColor) => {
+const showToast = (text, backgroundColor, noTimer = false) => {
   Toastify({
     text,
     duration: 3000,
     gravity: "top",
     position: "right",
     stopOnFocus: true,
-    backgroundColor
+    backgroundColor,
+    className: noTimer ? "toast-no-timer" : ""
   }).showToast()
 }
 
 // APPLY
 const applyJob = async () => {
   if (!selectedJob.value) return
-  if (hasPendingApplication.value) {
-    showToast("Application already pending.", "#f59e0b")
+  if (hasExistingApplication.value) {
+    const status = selectedJobApplicationStatus.value
+    const label =
+      status === "pending" ? "pending" :
+      status === "rejected" ? "rejected" :
+      status || "submitted"
+    showToast(`Application already ${label}.`, "#f59e0b")
     return
   }
 
@@ -785,8 +851,11 @@ const applyJob = async () => {
       status: "pending"
     })
 
-    appliedJobIds.value = new Set([...appliedJobIds.value, selectedJobId])
-    showToast("Application sent!", "#16a34a")
+    applicationStatusByJob.value = {
+      ...applicationStatusByJob.value,
+      [selectedJobId]: "pending",
+    }
+    showToast("Application sent!", "#16a34a", true)
 
   } catch (err) {
     console.error(err)

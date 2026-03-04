@@ -7,7 +7,6 @@
         </button>
 
         <nav class="nav-center">
-          <router-link to="/search-jobs" class="nav-link">Find Job</router-link>
           <router-link to="/about-us" class="nav-link">About Us</router-link>
           <button type="button" class="nav-link nav-link-btn" @click="goToLandingSection('#tutorial')">Read First</button>
           <button type="button" class="nav-link nav-link-btn" @click="goToLandingSection('#privacy')">Privacy</button>
@@ -54,7 +53,6 @@
           </div>
 
           <nav class="mobile-nav-links">
-            <router-link to="/search-jobs" class="mobile-nav-link" @click="closeMobileMenu">Find Job</router-link>
             <router-link to="/about-us" class="mobile-nav-link" @click="closeMobileMenu">About Us</router-link>
             <button type="button" class="mobile-nav-link" @click="goToLandingSection('#tutorial')">Read First</button>
             <button type="button" class="mobile-nav-link" @click="goToLandingSection('#privacy')">Privacy</button>
@@ -75,119 +73,67 @@
         class="section"
         :class="{ 'about-visible': isAboutVisible }"
       >
-        <div class="about-panel">
-          <div class="about-image-wrap">
-            <div
-              class="about-slider"
-              aria-label="PWD worker highlights"
-              @mouseenter="stopAboutSlider"
-              @mouseleave="startAboutSlider"
-            >
-              <div class="about-frame">
-                <img
-                  v-for="(img, index) in aboutImages"
-                  :key="index"
-                  :src="img.src"
-                  :alt="img.alt"
-                  class="about-single-image"
-                  :class="aboutFrameClass(index)"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="about-copy">
-            <span class="about-badge">Who We Are</span>
-            <h3>About Us</h3>
-            <p>
-              The Employment Assistance Platform for Persons with Disabilities is
-              designed to connect qualified PWD job seekers with inclusive
-              employers in the City of Dasmarinas.
-            </p>
-            <p>
-              With built-in decision support, the system helps make hiring more
-              accessible, fair, and data-guided for both applicants and
-              organizations.
-            </p>
-            <p>
-              Employers can post opportunities with clear accessibility details,
-              while applicants receive role recommendations aligned with their
-              capabilities, preferences, and qualifications.
-            </p>
-            <p>
-              This approach supports inclusive growth by improving visibility of
-              PWD talent, reducing hiring barriers, and creating a more connected
-              local employment ecosystem.
-            </p>
-          </div>
+        <div class="about-intro-copy">
+          <span class="about-badge">Who We Are</span>
+          <h3>About Us</h3>
+          <p>
+            The Employment Assistance Platform for Persons with Disabilities is designed
+            to connect qualified PWD job seekers with inclusive employers in the City of Dasmarinas.
+          </p>
         </div>
 
-        <section class="about-pillars-section" aria-label="Mission and Vision">
-          <div class="about-pillars-head">
-            <span class="about-pillars-eyebrow">Guiding Principles</span>
-            <h4>Our Mission and Vision</h4>
-            <p>The principles that guide our platform and inclusive hiring goals.</p>
-          </div>
-          <div class="about-pillars">
-            <article id="mission" class="about-pillar about-pillar-mission">
-              <div class="about-pillar-heading">
-                <span class="about-pillar-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3l2.6 5.3L20 11l-5.4 2.7L12 19l-2.6-5.3L4 11l5.4-2.7L12 3z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-                <div class="about-pillar-title-wrap">
-                  <h4>Mission</h4>
-                  <span class="about-pillar-subtitle">Empowering PWD talent through access</span>
-                </div>
-              </div>
-              <p>
-                To empower Persons with Disabilities by opening pathways to inclusive
-                employment through an accessible, supportive, and opportunity-driven platform.
-              </p>
-            </article>
-
-            <article id="vision" class="about-pillar about-pillar-vision">
-              <div class="about-pillar-heading">
-                <span class="about-pillar-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.7" />
-                    <path d="M3.5 12s3.1-5.7 8.5-5.7S20.5 12 20.5 12s-3.1 5.7-8.5 5.7S3.5 12 3.5 12z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-                <div class="about-pillar-title-wrap">
-                  <h4>Vision</h4>
-                  <span class="about-pillar-subtitle">Barrier-free and meaningful employment</span>
-                </div>
-              </div>
-              <p>
-                A future where every qualified PWD is seen for their strengths and
-                can access fair, meaningful, and sustainable work without barriers.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section class="about-gallery" aria-label="PWD success moments">
-          <div class="about-gallery-head">
-            <h4>In Action</h4>
+        <article
+          class="about-parallax-block"
+          :style="sectionBgStyle(0)"
+          aria-label="About platform overview"
+        >
+          <div class="about-parallax-overlay">
+            <h4>Inclusive Employment Through Technology</h4>
             <p>
-              Highlights of the platform experience from onboarding to employment readiness.
+              With built-in decision support, the platform helps make hiring more accessible,
+              fair, and data-guided for both applicants and organizations.
             </p>
           </div>
-          <div class="about-gallery-grid">
-            <button
-              v-for="(img, index) in aboutImages"
-              :key="`gallery-${index}`"
-              type="button"
-              class="about-gallery-card"
-              :class="{ 'about-gallery-card-active': activeAboutSlide === index }"
-              @click="activeAboutSlide = index"
-            >
-              <img :src="img.src" :alt="img.alt" class="about-gallery-image" />
-            </button>
+        </article>
+
+        <article
+          class="about-parallax-block"
+          :style="sectionBgStyle(1)"
+          aria-label="Mission"
+        >
+          <div class="about-parallax-overlay">
+            <h4>Mission</h4>
+            <p>
+              To empower Persons with Disabilities by opening pathways to inclusive employment
+              through an accessible, supportive, and opportunity-driven platform.
+            </p>
           </div>
-        </section>
+        </article>
+
+        <article
+          class="about-parallax-block"
+          :style="sectionBgStyle(2)"
+          aria-label="Vision"
+        >
+          <div class="about-parallax-overlay">
+            <h4>Vision</h4>
+            <p>
+              A future where every qualified PWD is seen for their strengths and can access fair,
+              meaningful, and sustainable work without barriers.
+            </p>
+          </div>
+        </article>
+
+        <div class="about-outro-copy">
+          <p>
+            Employers can post opportunities with clear accessibility details, while applicants
+            receive role recommendations aligned with their capabilities, preferences, and qualifications.
+          </p>
+          <p>
+            This approach supports inclusive growth by improving visibility of PWD talent,
+            reducing hiring barriers, and creating a more connected local employment ecosystem.
+          </p>
+        </div>
       </section>
     </main>
 
@@ -257,9 +203,7 @@ export default {
       isScrolled: false,
       isMobileMenuOpen: false,
       isAboutVisible: false,
-      aboutSlideTimer: null,
       aboutObserver: null,
-      activeAboutSlide: 0,
       aboutImages: [
         { src: aboutPhoto, alt: "PWD worker collaborating in an inclusive workspace" },
         { src: aboutPhoto2, alt: "PWD job seeker onboarding and support scene" },
@@ -271,11 +215,9 @@ export default {
     window.addEventListener("scroll", this.onScroll, { passive: true });
     document.addEventListener("keydown", this.onGlobalKeydown);
     this.onScroll();
-    this.startAboutSlider();
     this.setupAboutObserver();
   },
   beforeUnmount() {
-    this.stopAboutSlider();
     document.body.style.overflow = "";
     window.removeEventListener("scroll", this.onScroll);
     document.removeEventListener("keydown", this.onGlobalKeydown);
@@ -305,27 +247,11 @@ export default {
       this.closeMobileMenu();
       this.$router.push({ path: "/landingpage", hash });
     },
-    startAboutSlider() {
-      this.stopAboutSlider();
-      if (!Array.isArray(this.aboutImages) || this.aboutImages.length <= 1) return;
-      this.aboutSlideTimer = window.setInterval(() => {
-        this.activeAboutSlide =
-          (this.activeAboutSlide + 1) % this.aboutImages.length;
-      }, 4200);
-    },
-    stopAboutSlider() {
-      if (this.aboutSlideTimer) {
-        window.clearInterval(this.aboutSlideTimer);
-        this.aboutSlideTimer = null;
-      }
-    },
-    aboutFrameClass(index) {
-      const total = Array.isArray(this.aboutImages) ? this.aboutImages.length : 0;
-      if (!total) return "";
-      const offset = (index - this.activeAboutSlide + total) % total;
-      if (offset === 0) return "frame-front";
-      if (offset === 1) return "frame-middle";
-      return "frame-back";
+    sectionBgStyle(index) {
+      const image = this.aboutImages?.[index]?.src || this.aboutImages?.[0]?.src || "";
+      return {
+        backgroundImage: `linear-gradient(120deg, rgba(2, 6, 23, 0.52), rgba(15, 79, 37, 0.36)), url(${image})`
+      };
     },
     setupAboutObserver() {
       const section = this.$refs.aboutSection;
@@ -632,133 +558,88 @@ export default {
 #about.section {
   width: min(1160px, 100%);
   margin-inline: auto;
-  margin-bottom: 14px;
-  padding: 44px 24px 18px;
+  margin-bottom: 18px;
+  padding: 38px 24px 22px;
   position: relative;
 }
 
-#about.section::before,
-#about.section::after {
-  content: "";
-  position: absolute;
-  border-radius: 999px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-#about.section::before {
-  width: 320px;
-  height: 320px;
-  top: -120px;
-  left: -90px;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.26) 0%, rgba(52, 211, 153, 0) 70%);
-}
-
-#about.section::after {
-  width: 300px;
-  height: 300px;
-  right: -80px;
-  bottom: -120px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.18) 0%, rgba(59, 130, 246, 0) 72%);
-}
-
-.about-panel {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 0;
-  align-items: stretch;
-  background: linear-gradient(160deg, #fff 0%, #f8fcff 57%, #eefaf2 100%);
-  border: 1px solid #dbe7f5;
+.about-intro-copy {
+  margin: 0 auto 16px;
+  max-width: 820px;
+  text-align: center;
+  padding: 20px 18px;
   border-radius: 16px;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.1);
-  overflow: hidden;
-  min-height: 470px;
+  border: 1px solid #dbe7f5;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f9f6 100%);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
   opacity: 0;
   transform: translateY(22px);
   transition: opacity 0.7s ease, transform 0.7s ease;
 }
 
-#about.about-visible .about-panel {
+#about.about-visible .about-intro-copy {
   opacity: 1;
   transform: translateY(0);
 }
 
-.about-image-wrap {
-  padding: 24px;
-  background: radial-gradient(circle at 20% 20%, rgba(15, 79, 37, 0.12), transparent 56%), #f3faf6;
-  display: grid;
-  place-items: center;
+.about-intro-copy p {
+  margin: 10px 0 0;
+  color: #334155;
+  line-height: 1.65;
 }
 
-.about-slider {
-  width: 100%;
-  max-width: 560px;
-  border-radius: 16px;
-  overflow: visible;
-  perspective: 1200px;
-}
-
-.about-frame {
-  width: 100%;
-  aspect-ratio: 4/3;
+.about-parallax-block {
+  min-height: 360px;
+  border-radius: 18px;
+  overflow: hidden;
+  margin-top: 16px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+  border: 1px solid rgba(203, 213, 225, 0.65);
+  box-shadow: 0 22px 36px rgba(15, 23, 42, 0.2);
   position: relative;
-  overflow: visible;
-  transform-origin: center;
+  display: grid;
+  align-items: end;
 }
 
-.about-single-image {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  inset: 0;
-  border-radius: 14px;
-  border: 1px solid #d4e1f2;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.22);
-  object-fit: cover;
-  display: block;
-  transform-origin: center center;
-  opacity: .55;
-  transform: translate3d(0, 34px, -108px) rotateX(-14deg) scale(.92);
-  filter: blur(.95px) brightness(.82);
-  transition:
-    transform 1.05s cubic-bezier(.22,.61,.36,1),
-    opacity .95s ease,
-    filter 1.05s ease;
-  pointer-events: none;
-  z-index: 1;
+.about-parallax-overlay {
+  padding: 28px 24px 24px;
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.08) 0%, rgba(2, 6, 23, 0.68) 65%, rgba(2, 6, 23, 0.82) 100%);
+  color: #f8fafc;
 }
 
-.about-single-image.frame-front {
-  opacity: 1;
-  transform: translate3d(0, 0, 20px) rotateX(0deg) scale(1);
-  filter: blur(0) brightness(1);
-  z-index: 3;
+.about-parallax-overlay h4 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.1;
 }
 
-.about-single-image.frame-middle {
-  opacity: .82;
-  transform: translate3d(0, 16px, -48px) rotateX(-8deg) scale(.96);
-  filter: blur(.35px) brightness(.91);
-  z-index: 2;
+.about-parallax-overlay p {
+  margin: 10px 0 0;
+  max-width: 62ch;
+  line-height: 1.7;
+  color: rgba(248, 250, 252, 0.95);
 }
 
-.about-single-image.frame-back {
-  opacity: .62;
-  transform: translate3d(0, 32px, -96px) rotateX(-13deg) scale(.92);
-  filter: blur(.95px) brightness(.82);
-  z-index: 1;
+.about-outro-copy {
+  margin-top: 16px;
+  border-radius: 16px;
+  border: 1px solid #dbe7f5;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  padding: 20px 18px;
 }
 
-.about-copy {
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 14px;
-  padding: 36px;
-  box-sizing: border-box;
+.about-outro-copy p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.7;
+}
+
+.about-outro-copy p + p {
+  margin-top: 12px;
 }
 
 .about-badge {
@@ -776,324 +657,10 @@ export default {
   border: 1px solid #cce8d6;
 }
 
-.about-copy h3 {
+.about-intro-copy h3 {
   margin: 2px 0 2px;
   font-size: 2rem;
   color: #0f172a;
-}
-
-.about-copy p {
-  margin: 0;
-  color: #334155;
-  line-height: 1.72;
-}
-
-.about-pillars {
-  margin-top: 18px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-  position: relative;
-}
-
-.about-pillars::before {
-  content: "";
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 50%;
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    rgba(148, 163, 184, 0) 0%,
-    rgba(148, 163, 184, 0.55) 20%,
-    rgba(148, 163, 184, 0.55) 80%,
-    rgba(148, 163, 184, 0) 100%
-  );
-  transform: translateX(-0.5px);
-  pointer-events: none;
-}
-
-.about-pillars-section {
-  position: relative;
-  margin-top: 24px;
-  padding: 22px 24px 20px;
-  border-radius: 20px;
-  background:
-    radial-gradient(110% 110% at 0% 0%, rgba(14, 116, 144, 0.1) 0%, rgba(14, 116, 144, 0) 46%),
-    radial-gradient(110% 110% at 100% 100%, rgba(22, 101, 52, 0.11) 0%, rgba(22, 101, 52, 0) 42%),
-    linear-gradient(150deg, rgba(251, 253, 255, 0.9) 0%, rgba(244, 249, 255, 0.88) 52%, rgba(238, 250, 243, 0.88) 100%);
-  border: 1px solid rgba(217, 231, 247, 0.85);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
-  overflow: hidden;
-}
-
-.about-pillars-section::before {
-  content: "";
-  position: absolute;
-  top: -42px;
-  right: -62px;
-  width: 210px;
-  height: 210px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(37, 99, 235, 0.15) 0%, rgba(37, 99, 235, 0) 70%);
-  pointer-events: none;
-}
-
-.about-pillars-section::after {
-  content: "";
-  position: absolute;
-  bottom: -88px;
-  left: -36px;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(15, 118, 110, 0.13) 0%, rgba(15, 118, 110, 0) 72%);
-  pointer-events: none;
-}
-
-.about-pillars-head h4 {
-  margin: 0;
-  font-size: 1.3rem;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  color: #0b1220;
-  position: relative;
-  z-index: 1;
-  text-align: center;
-}
-
-.about-pillars-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  margin-bottom: 10px;
-  border-radius: 999px;
-  border: 1px solid #cfe2f6;
-  background: rgba(255, 255, 255, 0.8);
-  color: #0f4f25;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  position: relative;
-  z-index: 1;
-}
-
-.about-pillars-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.about-pillars-head p {
-  margin: 8px 0 0;
-  color: #334155;
-  line-height: 1.6;
-  max-width: 62ch;
-  position: relative;
-  z-index: 1;
-  text-align: center;
-}
-
-.about-pillar {
-  position: relative;
-  z-index: 1;
-  border-radius: 0;
-  padding: 16px 10px 12px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  transition: none;
-  overflow: visible;
-}
-
-.about-pillar::before {
-  content: "";
-  position: absolute;
-  inset: auto auto 0 50%;
-  width: 72px;
-  height: 3px;
-  background: currentColor;
-  opacity: 0.85;
-  border-radius: 999px;
-  transform: translateX(-50%);
-}
-
-.about-pillar:hover {
-  transform: none;
-  box-shadow: none;
-}
-
-.about-pillar-heading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-  text-align: center;
-}
-
-.about-pillar-title-wrap {
-  min-width: 0;
-  width: 100%;
-}
-
-.about-pillar h4 {
-  margin: 2px 0 0;
-  font-size: 1.18rem;
-  font-weight: 800;
-  line-height: 1.15;
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-
-.about-pillar-subtitle {
-  display: inline-block;
-  margin-top: 5px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: 0.02em;
-  opacity: 0.78;
-}
-
-.about-pillar-icon {
-  width: 56px;
-  height: 56px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  animation: aboutPillarIconSpin 5.4s linear infinite;
-  transform-origin: center;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-
-.about-pillar-icon svg {
-  width: 28px;
-  height: 28px;
-  filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.14));
-}
-
-.about-pillar p {
-  margin: 14px auto 0;
-  color: #1f2937;
-  line-height: 1.65;
-  text-align: center;
-  max-width: 36ch;
-}
-
-.about-pillar-mission {
-  color: #0f766e;
-  border-left: 0;
-  background: transparent;
-}
-
-.about-pillar-mission h4 {
-  color: #0f766e;
-}
-
-.about-pillar-mission .about-pillar-icon {
-  color: #0f766e;
-}
-
-.about-pillar-mission .about-pillar-subtitle {
-  color: #0f766e;
-}
-
-.about-pillar-vision {
-  color: #1e40af;
-  border-left: 0;
-  background: transparent;
-}
-
-.about-pillar-vision h4 {
-  color: #1e40af;
-}
-
-.about-pillar-vision .about-pillar-icon {
-  color: #1e40af;
-}
-
-.about-pillar-vision .about-pillar-subtitle {
-  color: #1e40af;
-}
-
-.about-pillar-vision .about-pillar-icon {
-  animation-delay: 0.35s;
-}
-
-@keyframes aboutPillarIconSpin {
-  0% {
-    transform: rotate(0deg) scale(1);
-  }
-  100% {
-    transform: rotate(360deg) scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .about-pillar-icon {
-    animation: none;
-  }
-}
-
-.about-gallery {
-  margin-top: 20px;
-  background: #ffffff;
-  border: 1px solid #dbe7f5;
-  border-radius: 16px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.09);
-  padding: 18px;
-}
-
-.about-gallery-head h4 {
-  margin: 0;
-  font-size: 1.08rem;
-  color: #0f172a;
-}
-
-.about-gallery-head p {
-  margin: 6px 0 0;
-  color: #475569;
-  font-size: 0.92rem;
-}
-
-.about-gallery-grid {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.about-gallery-card {
-  border: 1px solid #d2dfef;
-  background: #f8fbff;
-  padding: 0;
-  border-radius: 12px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
-}
-
-.about-gallery-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
-}
-
-.about-gallery-card-active {
-  border-color: #0f4f25;
-  box-shadow: 0 10px 20px rgba(15, 79, 37, 0.2);
-}
-
-.about-gallery-image {
-  display: block;
-  width: 100%;
-  aspect-ratio: 4/3;
-  object-fit: cover;
 }
 
 .footer {
@@ -1265,42 +832,9 @@ export default {
     padding: 34px 16px 14px;
   }
 
-  .about-panel {
-    grid-template-columns: 1fr;
-    min-height: auto;
-  }
-
-  .about-image-wrap {
-    padding: 24px 18px;
-  }
-
-  .about-copy {
-    padding: 26px 18px 22px;
-  }
-
-  .about-pillars {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
-
-  .about-pillars::before {
-    display: none;
-  }
-
-  .about-pillars-section {
-    padding: 18px;
-  }
-
-  .about-pillar {
-    padding: 12px 2px 10px;
-  }
-
-  .about-pillar p {
-    max-width: 100%;
-  }
-
-  .about-gallery-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .about-parallax-block {
+    min-height: 320px;
+    background-attachment: scroll;
   }
 
   .footer-container {
@@ -1341,30 +875,12 @@ export default {
     display: none;
   }
 
-  .about-gallery-grid {
-    grid-template-columns: 1fr;
+  .about-parallax-block {
+    min-height: 286px;
   }
 
-  .about-pillars-head h4 {
-    font-size: 1.15rem;
-  }
-
-  .about-pillar h4 {
-    font-size: 1.05rem;
-  }
-
-  .about-pillar-subtitle {
-    font-size: 0.74rem;
-  }
-
-  .about-pillar-icon {
-    width: 48px;
-    height: 48px;
-  }
-
-  .about-pillar-icon svg {
-    width: 24px;
-    height: 24px;
+  .about-parallax-overlay {
+    padding: 20px 14px 16px;
   }
 }
 

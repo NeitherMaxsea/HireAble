@@ -64,7 +64,7 @@
               <button class="view" type="button" :disabled="savingJobId === entry.id" @click="openView(entry)">
                 View
               </button>
-              <button class="close" type="button" :disabled="savingJobId === entry.id" @click="rejectJob(entry)">
+              <button class="close" type="button" :disabled="savingJobId === entry.id" @click="requestReject(entry)">
                 {{ savingJobId === entry.id ? "Saving..." : "Reject" }}
               </button>
               <button class="reopen" type="button" :disabled="savingJobId === entry.id" @click="approveJob(entry)">
@@ -104,6 +104,10 @@
               <div>
                 <h4>Type</h4>
                 <p>{{ activeJob.type || "Open" }}</p>
+              </div>
+              <div>
+                <h4>Salary</h4>
+                <p>{{ activeJob.salary || "Negotiable" }}</p>
               </div>
               <div>
                 <h4>Submitted</h4>
@@ -152,13 +156,54 @@
           </div>
 
           <div class="modal-actions">
-            <button class="close" type="button" :disabled="savingJobId === activeJob.id" @click="rejectJob(activeJob)">
+            <button class="modal-btn modal-btn-reject" type="button" :disabled="savingJobId === activeJob.id" @click="rejectJob(activeJob)">
               {{ savingJobId === activeJob.id ? "Saving..." : "Reject" }}
             </button>
-            <button class="reopen" type="button" :disabled="savingJobId === activeJob.id" @click="approveJob(activeJob)">
+            <button class="modal-btn modal-btn-approve" type="button" :disabled="savingJobId === activeJob.id" @click="approveJob(activeJob)">
               {{ savingJobId === activeJob.id ? "Saving..." : "Approve" }}
             </button>
-            <button class="cancel" type="button" @click="showViewModal = false">Close</button>
+            <button class="modal-btn modal-btn-close" type="button" @click="showViewModal = false">Close</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="modal-fade">
+      <div v-if="showRejectReasonModal && rejectTargetJob" class="modal-overlay" @click.self="closeRejectReasonModal">
+        <div class="modal reject-modal">
+          <div class="view-header">
+            <div>
+              <h3>Reject Job Post</h3>
+              <p class="subtitle">Please provide the rejection reason for HR.</p>
+            </div>
+            <button class="close-x" @click="closeRejectReasonModal">x</button>
+          </div>
+
+          <div class="view-body">
+            <div class="detail-block">
+              <h4>Job</h4>
+              <p><strong>{{ rejectTargetJob.title || "Untitled role" }}</strong></p>
+              <p>{{ rejectTargetJob.companyName || "N/A" }}</p>
+            </div>
+
+            <div class="detail-block">
+              <h4>Rejection Reason</h4>
+              <textarea
+                v-model="rejectReasonDraft"
+                rows="4"
+                class="note-input"
+                placeholder="State why this job is rejected."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-close" type="button" :disabled="savingJobId === rejectTargetJob.id" @click="closeRejectReasonModal">
+              Cancel
+            </button>
+            <button class="modal-btn modal-btn-reject" type="button" :disabled="savingJobId === rejectTargetJob.id" @click="confirmRejectReason">
+              {{ savingJobId === rejectTargetJob.id ? "Saving..." : "Submit Rejection" }}
+            </button>
           </div>
         </div>
       </div>
@@ -183,6 +228,9 @@ const errorMessage = ref("")
 const reviewNotes = ref({})
 const showViewModal = ref(false)
 const activeJobId = ref("")
+const showRejectReasonModal = ref(false)
+const rejectTargetId = ref("")
+const rejectReasonDraft = ref("")
 
 const routeJobId = computed(() => String(route.params.id || route.query.id || "").trim())
 
@@ -192,6 +240,10 @@ const pendingJobs = computed(() =>
 
 const activeJob = computed(() =>
   pendingJobs.value.find((entry) => entry.id === activeJobId.value) || null
+)
+
+const rejectTargetJob = computed(() =>
+  pendingJobs.value.find((entry) => entry.id === rejectTargetId.value) || null
 )
 
 function toastSuccess(text) {
@@ -342,12 +394,12 @@ function openView(entry) {
 }
 
 async function submitDecision(entry, decision) {
-  if (!entry?.id || savingJobId.value) return
+  if (!entry?.id || savingJobId.value) return false
 
   const note = String(reviewNotes.value[entry.id] || "").trim()
   if (decision === "rejected" && !note) {
     toastError("Please provide a rejection reason.")
-    return
+    return false
   }
 
   savingJobId.value = entry.id
@@ -373,9 +425,11 @@ async function submitDecision(entry, decision) {
       showViewModal.value = false
     }
     await loadJobs()
+    return true
   } catch (error) {
     console.error(error)
     toastError(error?.response?.data?.message || "Failed to submit finance decision.")
+    return false
   } finally {
     savingJobId.value = ""
   }
@@ -385,8 +439,39 @@ async function approveJob(entry) {
   await submitDecision(entry, "approved")
 }
 
+async function requestReject(entry) {
+  if (!entry?.id) return
+  rejectTargetId.value = entry.id
+  rejectReasonDraft.value = String(reviewNotes.value?.[entry.id] || "").trim()
+  showRejectReasonModal.value = true
+}
+
 async function rejectJob(entry) {
   await submitDecision(entry, "rejected")
+}
+
+function closeRejectReasonModal() {
+  if (savingJobId.value && savingJobId.value === rejectTargetId.value) return
+  showRejectReasonModal.value = false
+  rejectTargetId.value = ""
+  rejectReasonDraft.value = ""
+}
+
+async function confirmRejectReason() {
+  const target = rejectTargetJob.value
+  if (!target?.id) return
+
+  const note = String(rejectReasonDraft.value || "").trim()
+  if (!note) {
+    toastError("Rejection reason is required.")
+    return
+  }
+
+  reviewNotes.value[target.id] = note
+  const submitted = await submitDecision(target, "rejected")
+  if (submitted) {
+    closeRejectReasonModal()
+  }
 }
 
 function goBack() {
@@ -663,6 +748,10 @@ onMounted(() => {
   padding: 16px;
 }
 
+.reject-modal {
+  width: min(560px, 100%);
+}
+
 .view-header {
   display: flex;
   justify-content: space-between;
@@ -743,20 +832,58 @@ onMounted(() => {
 }
 
 .modal-actions {
-  margin-top: 12px;
+  margin-top: 14px;
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
 }
 
-.cancel {
-  background: #e5e7eb;
-  color: #111827;
+.modal-btn {
   border: none;
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-weight: 600;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
   cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.modal-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+
+.modal-btn:active {
+  transform: translateY(0);
+}
+
+.modal-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+
+.modal-btn-close {
+  background: #f1f5f9;
+  color: #1f2937;
+  border: 1px solid #dbe4ee;
+}
+
+.modal-btn-reject {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(185, 28, 28, 0.28);
+}
+
+.modal-btn-approve {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(21, 128, 61, 0.28);
 }
 
 .error {

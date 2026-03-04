@@ -23,6 +23,18 @@
           <option value="applications">Applications</option>
         </select>
       </label>
+      <label>
+        <span>Role</span>
+        <select v-model="roleFilter">
+          <option value="all">All</option>
+          <option value="admin">Admin</option>
+          <option value="company_admin">Company Admin</option>
+          <option value="hr">HR</option>
+          <option value="finance">Finance</option>
+          <option value="employer">Employer</option>
+          <option value="applicant">Applicant</option>
+        </select>
+      </label>
       <button type="button" class="clear-btn" @click="clearFilters">Clear</button>
     </div>
 
@@ -68,12 +80,13 @@
               <th>Time</th>
               <th>Source</th>
               <th>Event</th>
+              <th>Role</th>
               <th>Account</th>
               <th>Details</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="event in visibleEvents" :key="event.id">
+            <tr v-for="event in pagedEvents" :key="event.id">
               <td class="time">{{ formatDateTime(event.timestampMs) }}</td>
               <td>
                 <span class="badge source" :class="event.sourceClass">{{ event.sourceLabel }}</span>
@@ -81,14 +94,19 @@
               <td>
                 <span class="badge event">{{ event.eventLabel }}</span>
               </td>
+              <td>
+                <span class="badge role">{{ roleLabel(event.role) }}</span>
+              </td>
               <td class="account">{{ event.accountLabel }}</td>
               <td class="details">{{ event.details }}</td>
             </tr>
           </tbody>
         </table>
 
-        <div v-if="canLoadMore" class="load-more-wrap">
-          <button type="button" class="load-more" @click="visibleCount += PAGE_SIZE">Load more</button>
+        <div v-if="totalPages > 1" class="load-more-wrap">
+          <button type="button" class="load-more" :disabled="currentPage === 1" @click="goPrevPage">Previous</button>
+          <span class="page-indicator">Page {{ currentPage }} of {{ totalPages }}</span>
+          <button type="button" class="load-more" :disabled="currentPage === totalPages" @click="goNextPage">Next</button>
         </div>
       </div>
     </div>
@@ -97,236 +115,202 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { collection, onSnapshot } from "@/lib/laravel-data"
-import { db } from "@/lib/client-platform"
+import api from "@/services/api"
 
 const loading = ref(true)
 const loadError = ref("")
-const userEventsLower = ref([])
-const userEventsUpper = ref([])
-const jobEvents = ref([])
-const applicationEvents = ref([])
-const unsubscribers = []
+const events = ref([])
 const fromDate = ref("")
 const toDate = ref("")
 const sourceFilter = ref("all")
-const PAGE_SIZE = 50
-const visibleCount = ref(PAGE_SIZE)
-
-const userEvents = computed(() => {
-  return [...userEventsLower.value, ...userEventsUpper.value]
-})
-
-const events = computed(() => {
-  return [...userEvents.value, ...jobEvents.value, ...applicationEvents.value]
-    .filter((item) => item.timestampMs > 0)
-    .sort((a, b) => b.timestampMs - a.timestampMs)
-})
+const roleFilter = ref("all")
+const PAGE_SIZE = 10
+const currentPage = ref(1)
+const userRoleByEmail = ref({})
+let refreshTimer = null
 
 const filteredEvents = computed(() => {
   const minMs = parseDateStart(fromDate.value)
   const maxMs = parseDateEnd(toDate.value)
-  return events.value.filter((item) => {
+  return events.value
+    .filter((item) => item.timestampMs > 0)
+    .filter((item) => {
     const sourceMatch = sourceFilter.value === "all" || item.sourceClass === sourceFilter.value
+    const roleMatch = roleFilter.value === "all" || item.role === roleFilter.value
     const minMatch = !minMs || item.timestampMs >= minMs
     const maxMatch = !maxMs || item.timestampMs <= maxMs
-    return sourceMatch && minMatch && maxMatch
+    return sourceMatch && roleMatch && minMatch && maxMatch
   })
+    .sort((a, b) => b.timestampMs - a.timestampMs)
 })
 
-const visibleEvents = computed(() => filteredEvents.value.slice(0, visibleCount.value))
-const canLoadMore = computed(() => visibleEvents.value.length < filteredEvents.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredEvents.value.length / PAGE_SIZE)))
+const pagedEvents = computed(() => {
+  const page = Math.min(Math.max(currentPage.value, 1), totalPages.value)
+  const start = (page - 1) * PAGE_SIZE
+  return filteredEvents.value.slice(start, start + PAGE_SIZE)
+})
 const userEventCount = computed(() => filteredEvents.value.filter((event) => event.sourceClass === "users").length)
 const jobEventCount = computed(() => filteredEvents.value.filter((event) => event.sourceClass === "jobs").length)
 const applicationEventCount = computed(() => filteredEvents.value.filter((event) => event.sourceClass === "applications").length)
 
-onMounted(() => {
-  subscribeUsers("users")
-  subscribeUsers("Users")
-  subscribeJobs()
-  subscribeApplications()
+onMounted(async () => {
+  await Promise.all([loadUserRoles(), loadLogs()])
+  refreshTimer = window.setInterval(() => {
+    void loadLogs(false)
+  }, 10000)
 })
 
 onBeforeUnmount(() => {
-  unsubscribers.forEach((unsub) => unsub && unsub())
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 
-watch([fromDate, toDate, sourceFilter], () => {
-  visibleCount.value = PAGE_SIZE
+watch([fromDate, toDate, sourceFilter, roleFilter], () => {
+  currentPage.value = 1
 })
 
-function subscribeUsers(collectionName) {
-  const unsub = onSnapshot(
-    collection(db, collectionName),
-    (snapshot) => {
-      const list = snapshot.docs.flatMap((docSnap) => {
-        const data = docSnap.data() || {}
-        const name = data.username || data.name || data.email || "Unknown user"
-        const role = String(data.role || "user")
-        const createdAtMs = toMillis(data.createdAt)
-        const loginAtMs = toMillis(data.lastLoginAt)
-        const items = []
-
-        if (createdAtMs) {
-          items.push({
-            id: `user-created-${docSnap.id}`,
-            timestampMs: createdAtMs,
-            sourceLabel: "Users",
-            sourceClass: "users",
-            eventLabel: "User Created",
-            accountLabel: data.email || docSnap.id,
-            details: `${name} (${role}) account created`
-          })
-        }
-        if (loginAtMs) {
-          items.push({
-            id: `user-login-${docSnap.id}-${loginAtMs}`,
-            timestampMs: loginAtMs,
-            sourceLabel: "Users",
-            sourceClass: "users",
-            eventLabel: "User Login",
-            accountLabel: data.email || docSnap.id,
-            details: `${name} (${role}) signed in`
-          })
-        }
-        return items
-      })
-
-      if (collectionName === "Users") {
-        userEventsUpper.value = list
-      } else {
-        userEventsLower.value = list
-      }
-
-      loading.value = false
-      loadError.value = ""
-    },
-    () => {
-      if (!userEvents.value.length && !jobEvents.value.length && !applicationEvents.value.length) {
-        loadError.value = "Cannot read logs. Check Laravel Rules/admin access."
-      }
-      loading.value = false
+async function loadLogs(showLoading = true) {
+  if (showLoading) loading.value = true
+  try {
+    const response = await api.get("/logs")
+    const rows = Array.isArray(response?.data) ? response.data : []
+    events.value = rows
+      .map((row, idx) => mapBackendLogRow(row, idx))
+      .filter((item) => item.timestampMs > 0)
+    loadError.value = ""
+  } catch (err) {
+    console.error(err)
+    if (!events.value.length) {
+      loadError.value = err?.response?.data?.message || "Cannot load logs."
     }
-  )
-
-  unsubscribers.push(unsub)
+  } finally {
+    if (showLoading) loading.value = false
+  }
 }
 
-function subscribeJobs() {
-  const unsub = onSnapshot(
-    collection(db, "jobs"),
-    (snapshot) => {
-      jobEvents.value = snapshot.docs
-        .map((docSnap) => {
-          const data = docSnap.data() || {}
-          const createdAtMs = toMillis(data.createdAt)
-          return {
-            id: `job-created-${docSnap.id}`,
-            timestampMs: createdAtMs,
-            sourceLabel: "Jobs",
-            sourceClass: "jobs",
-            eventLabel: "Job Posted",
-            accountLabel: resolveJobAccount(data),
-            details: `${data.title || "Untitled job"} (${data.location || "No location"})`
-          }
-        })
-        .filter((item) => item.timestampMs > 0)
-      loading.value = false
-    },
-    () => {
-      loading.value = false
-    }
-  )
-
-  unsubscribers.push(unsub)
+function mapBackendLogRow(row, index) {
+  const sourceClass = normalizeSource(row?.source)
+  const eventLabel = toEventLabel(row?.eventType)
+  const timestampMs = toMillis(row?.createdAt || row?.updatedAt)
+  const sourceLabelMap = {
+    users: "Users",
+    jobs: "Jobs",
+    applications: "Applications",
+  }
+  const role = inferRole(row)
+  return {
+    id: String(row?.id || `log-${index}`),
+    timestampMs,
+    sourceClass,
+    sourceLabel: sourceLabelMap[sourceClass] || "System",
+    eventLabel,
+    role,
+    accountLabel: String(row?.account || "System"),
+    details: String(row?.details || "-"),
+  }
 }
 
-function subscribeApplications() {
-  const unsub = onSnapshot(
-    collection(db, "applications"),
-    (snapshot) => {
-      applicationEvents.value = snapshot.docs
-        .map((docSnap) => {
-          const data = docSnap.data() || {}
-          const appliedAtMs = toMillis(data.appliedAt)
-          return {
-            id: `application-${docSnap.id}`,
-            timestampMs: appliedAtMs,
-            sourceLabel: "Applications",
-            sourceClass: "applications",
-            eventLabel: "Application Submitted",
-            accountLabel: resolveApplicationAccount(data),
-            details: `${data.jobTitle || "Unknown job"} (${String(data.status || "pending")})`
-          }
-        })
-        .filter((item) => item.timestampMs > 0)
-      loading.value = false
-    },
-    () => {
-      loading.value = false
-    }
-  )
+async function loadUserRoles() {
+  try {
+    const response = await api.get("/users")
+    const rows = Array.isArray(response?.data) ? response.data : []
+    const nextMap = {}
+    rows.forEach((row) => {
+      const email = String(row?.email || "").trim().toLowerCase()
+      const role = normalizeRole(String(row?.role || "").trim().toLowerCase())
+      if (email && role) {
+        nextMap[email] = role
+      }
+    })
+    userRoleByEmail.value = nextMap
+  } catch {
+    userRoleByEmail.value = {}
+  }
+}
 
-  unsubscribers.push(unsub)
+function normalizeSource(value) {
+  const source = String(value || "").trim().toLowerCase()
+  if (source.includes("user")) return "users"
+  if (source.includes("job")) return "jobs"
+  if (source.includes("application")) return "applications"
+  return source || "system"
+}
+
+function toEventLabel(value) {
+  const raw = String(value || "").trim()
+  if (!raw) return "System Event"
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
+
+function normalizeRole(value) {
+  const role = String(value || "").trim().toLowerCase()
+  if (!role) return "unknown"
+  if (role.includes("company") && role.includes("admin")) return "company_admin"
+  if (role === "hr" || role.includes("human resource")) return "hr"
+  if (role.includes("finance")) return "finance"
+  if (role.includes("operation")) return "operation"
+  if (role === "employer") return "employer"
+  if (role === "applicant") return "applicant"
+  if (role === "admin") return "admin"
+  return role
+}
+
+function inferRole(row) {
+  const account = String(row?.account || "").trim().toLowerCase()
+  const details = String(row?.details || "").trim().toLowerCase()
+  const event = String(row?.eventType || "").trim().toLowerCase()
+  const source = String(row?.source || "").trim().toLowerCase()
+  const bucket = `${account} ${details} ${event} ${source}`
+
+  if (bucket.includes("company admin") || bucket.includes("company_admin")) return "company_admin"
+  if (/\bhr\b/.test(bucket) || bucket.includes("human resource")) return "hr"
+  if (bucket.includes("finance")) return "finance"
+  if (bucket.includes("operation")) return "operation"
+  if (bucket.includes("applicant")) return "applicant"
+  if (bucket.includes("employer")) return "employer"
+  if (bucket.includes("admin")) return "admin"
+
+  const emailMatch = account.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i)
+  const email = String(emailMatch?.[0] || "").toLowerCase()
+  if (email && userRoleByEmail.value[email]) {
+    return normalizeRole(userRoleByEmail.value[email])
+  }
+
+  return "unknown"
+}
+
+function roleLabel(role) {
+  const normalized = normalizeRole(role)
+  if (normalized === "company_admin") return "Company Admin"
+  if (normalized === "hr") return "HR"
+  if (normalized === "finance") return "Finance"
+  if (normalized === "operation") return "Operation"
+  if (normalized === "employer") return "Employer"
+  if (normalized === "applicant") return "Applicant"
+  if (normalized === "admin") return "Admin"
+  return "Unknown"
+}
+
+function goPrevPage() {
+  currentPage.value = Math.max(1, currentPage.value - 1)
+}
+
+function goNextPage() {
+  currentPage.value = Math.min(totalPages.value, currentPage.value + 1)
 }
 
 function toMillis(value) {
   if (!value) return 0
-  if (typeof value?.toMillis === "function") return value.toMillis()
   if (typeof value === "number") return value
-  const parsed = Date.parse(value)
+  const parsed = Date.parse(String(value))
   return Number.isNaN(parsed) ? 0 : parsed
-}
-
-function resolveJobAccount(data) {
-  const direct =
-    firstNonEmpty(
-      data.postedByEmail,
-      data.postedByName,
-      data.postedByUid,
-      data.createdByEmail,
-      data.createdByName,
-      data.createdByUid,
-      data.ownerEmail,
-      data.ownerName,
-      data.ownerUid,
-      data.userEmail,
-      data.userName,
-      data.userUid,
-      data.email,
-      data.username,
-      data.uid
-    )
-  if (direct) return direct
-
-  const org = firstNonEmpty(data.company, data.department, data.organization)
-  if (org) return `Legacy post (${org})`
-
-  return "Legacy post (no account saved)"
-}
-
-function resolveApplicationAccount(data) {
-  return (
-    firstNonEmpty(
-      data.applicantEmail,
-      data.applicantName,
-      data.applicantUid,
-      data.userEmail,
-      data.userName,
-      data.userUid,
-      data.email,
-      data.username,
-      data.uid
-    ) || "Legacy entry"
-  )
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    const text = String(value || "").trim()
-    if (text) return text
-  }
-  return ""
 }
 
 function formatDateTime(ms) {
@@ -355,7 +339,8 @@ function clearFilters() {
   fromDate.value = ""
   toDate.value = ""
   sourceFilter.value = "all"
-  visibleCount.value = PAGE_SIZE
+  roleFilter.value = "all"
+  currentPage.value = 1
 }
 </script>
 
@@ -536,10 +521,17 @@ th {
   color: #334155;
 }
 
+.badge.role {
+  background: #ecfeff;
+  color: #155e75;
+}
+
 .load-more-wrap {
   margin-top: 12px;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 10px;
 }
 
 .load-more {
@@ -550,6 +542,17 @@ th {
   padding: 8px 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.load-more:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 13px;
+  color: #0f3b39;
+  font-weight: 600;
 }
 
 @media (max-width: 760px) {

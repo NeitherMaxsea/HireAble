@@ -72,41 +72,18 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
-import { auth, db } from "@/lib/client-platform"
-import { collection, doc, getDoc, onSnapshot, query, where } from "@/lib/laravel-data"
+import api from "@/services/api"
 
 const loading = ref(true)
 const loadError = ref("")
 const companyId = ref("")
 const companyName = ref("")
-const companyAdminUid = ref("")
-const employeesLower = ref([])
-const employeesUpper = ref([])
 const auditEvents = ref([])
-const unsubscribers = []
-
-const employees = computed(() => {
-  const merged = new Map()
-  ;[...employeesLower.value, ...employeesUpper.value].forEach((user) => {
-    merged.set(user.id, user)
-  })
-  return Array.from(merged.values())
-})
-
-const employeeMapByUid = computed(() => {
-  const map = new Map()
-  employees.value.forEach((item) => map.set(item.id, item))
-  return map
-})
-
-const employeeMapByEmail = computed(() => {
-  const map = new Map()
-  employees.value.forEach((item) => {
-    const email = String(item.email || "").toLowerCase().trim()
-    if (email) map.set(email, item)
-  })
-  return map
-})
+const employeeEmails = ref(new Set())
+const employeeNames = ref(new Set())
+const jobTitles = ref(new Set())
+let refreshTimer = null
+let bootstrapDone = false
 
 const events = computed(() => {
   return auditEvents.value
@@ -134,175 +111,200 @@ const adminEventsCount = computed(() => {
 
 onMounted(async () => {
   await bootstrapScope()
-  if (!companyId.value || !companyAdminUid.value) return
-  subscribeEmployees("users")
-  subscribeEmployees("Users")
-  subscribeCompanyAuditLogs()
+  if (!companyId.value) {
+    loading.value = false
+    return
+  }
+
+  await loadCompanyScopeData()
+  await loadCompanyLogs()
+  bootstrapDone = true
+
+  refreshTimer = window.setInterval(() => {
+    void loadCompanyLogs(false)
+  }, 10000)
 })
 
 onBeforeUnmount(() => {
-  unsubscribers.forEach((unsub) => unsub && unsub())
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 
 async function bootstrapScope() {
-  const uid = auth.currentUser?.uid
-  if (!uid) {
-    loadError.value = "Session missing. Please login again."
-    loading.value = false
-    return
-  }
+  companyId.value = String(localStorage.getItem("companyId") || "").trim()
+  companyName.value = String(localStorage.getItem("companyName") || "").trim()
 
-  companyAdminUid.value = uid
-  const lowerSnap = await getDoc(doc(db, "users", uid))
-  if (lowerSnap.exists()) {
-    hydrateProfile(lowerSnap.data())
-    return
-  }
+  const uid = String(
+    localStorage.getItem("userUid") ||
+    localStorage.getItem("uid") ||
+    ""
+  ).trim()
+  const role = String(localStorage.getItem("userRole") || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
 
-  const upperSnap = await getDoc(doc(db, "Users", uid))
-  if (upperSnap.exists()) {
-    hydrateProfile(upperSnap.data())
-    return
-  }
-
-  loadError.value = "Company admin profile not found."
-  loading.value = false
-}
-
-function hydrateProfile(profile) {
-  const role = String(profile?.role || "").toLowerCase()
   if (role !== "company_admin") {
     loadError.value = "Access denied. Company admin only."
-    loading.value = false
     return
   }
 
-  companyId.value = String(profile?.companyId || "").trim()
-  companyName.value = String(profile?.companyName || "").trim()
-  if (!companyId.value) {
-    loadError.value = "No company assignment found."
-    loading.value = false
+  if (companyId.value) return
+  if (!uid) {
+    loadError.value = "Session missing. Please login again."
+    return
+  }
+
+  try {
+    const res = await api.get(`/users/${uid}`)
+    const user = res?.data || {}
+    companyId.value = String(user?.companyId || "").trim()
+    companyName.value = String(user?.companyName || "").trim()
+    if (!companyId.value) {
+      loadError.value = "No company assignment found."
+    }
+  } catch {
+    if (!companyId.value) {
+      loadError.value = "Unable to read company scope."
+    }
   }
 }
 
-function subscribeEmployees(collectionName) {
-  const unsub = onSnapshot(
-    query(collection(db, collectionName), where("companyId", "==", companyId.value)),
-    (snapshot) => {
-      const list = snapshot.docs
-        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-        .filter((user) => {
-          const role = String(user.role || "").toLowerCase()
-          const isCompanyRole = ["company_admin", "hr", "finance", "operation"].includes(role)
-          if (!isCompanyRole) return false
-          if (String(user.companyId || "") !== companyId.value) return false
-          return true
-        })
+async function loadCompanyScopeData() {
+  try {
+    const [usersRes, jobsRes] = await Promise.all([
+      api.get("/users", { params: { companyId: companyId.value } }),
+      api.get("/jobs", { params: { companyId: companyId.value } }),
+    ])
 
-      if (collectionName === "Users") {
-        employeesUpper.value = list
-      } else {
-        employeesLower.value = list
-      }
-      loading.value = false
-      loadError.value = ""
-    },
-    () => {
-      if (!events.value.length) {
-        loadError.value = "Cannot read employee profiles. Check Laravel rules."
-      }
-      loading.value = false
-    }
-  )
-  unsubscribers.push(unsub)
+    const users = Array.isArray(usersRes?.data) ? usersRes.data : []
+    const jobs = Array.isArray(jobsRes?.data) ? jobsRes.data : []
+
+    const allowedRoles = new Set(["company_admin", "hr", "finance", "operation", "employer"])
+    const nextEmails = new Set()
+    const nextNames = new Set()
+    users.forEach((u) => {
+      const role = String(u?.role || "").trim().toLowerCase()
+      if (!allowedRoles.has(role)) return
+      const email = String(u?.email || "").trim().toLowerCase()
+      const name = String(u?.name || u?.username || "").trim().toLowerCase()
+      if (email) nextEmails.add(email)
+      if (name) nextNames.add(name)
+    })
+
+    const nextTitles = new Set()
+    jobs.forEach((j) => {
+      const title = String(j?.title || j?.jobTitle || "").trim().toLowerCase()
+      if (title) nextTitles.add(title)
+    })
+
+    employeeEmails.value = nextEmails
+    employeeNames.value = nextNames
+    jobTitles.value = nextTitles
+  } catch {
+    employeeEmails.value = new Set()
+    employeeNames.value = new Set()
+    jobTitles.value = new Set()
+  }
 }
 
-function subscribeCompanyAuditLogs() {
-  const unsub = onSnapshot(
-    query(collection(db, "activity_logs"), where("companyId", "==", companyId.value)),
-    (snapshot) => {
-      auditEvents.value = snapshot.docs
-        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-        .filter((entry) => {
-          if (String(entry.companyId || "").trim() !== companyId.value) return false
-          return true
-        })
-        .map((entry) => {
-          const actor = resolveActor(entry)
-          const targetRole = String(entry.targetRole || "").trim().toLowerCase()
-          const roleLabel = actor.role || targetRole
-          const roleTag = roleLabel ? `Role: ${roleLabel}` : "Role: unknown"
-          const actorTag = `Actor: ${actor.label || "Unknown"}`
-          const targetTag = firstNonEmpty(entry.targetEmail, entry.targetUid)
-            ? `Target: ${firstNonEmpty(entry.targetEmail, entry.targetUid)}`
-            : ""
-          const baseDetails = String(entry.details || "").trim()
-          const detailParts = [baseDetails, actorTag, roleTag, targetTag].filter(Boolean)
-
-          return {
-            id: `audit-${entry.id}`,
-            timestampMs: toMillis(entry.createdAt),
-            sourceLabel: "Company Logs",
-            sourceClass: "admin",
-            eventLabel: String(entry.event || "Action"),
-            roleLabel,
-            accountLabel: actor.label || "Unknown",
-            details: detailParts.join(" | ")
-          }
-        })
-        .filter((entry) => entry.timestampMs > 0)
-      loading.value = false
-    },
-    () => {
-      loading.value = false
+async function loadCompanyLogs(showLoading = true) {
+  if (showLoading) loading.value = true
+  try {
+    const res = await api.get("/logs")
+    const rows = Array.isArray(res?.data) ? res.data : []
+    auditEvents.value = rows
+      .filter((row) => belongsToCompany(row))
+      .map((row, idx) => mapLogRow(row, idx))
+      .filter((item) => item.timestampMs > 0)
+    loadError.value = ""
+  } catch (err) {
+    console.error(err)
+    if (!auditEvents.value.length) {
+      loadError.value = err?.response?.data?.message || "Cannot load logs."
     }
-  )
-  unsubscribers.push(unsub)
+  } finally {
+    if (showLoading) loading.value = false
+  }
 }
 
-function resolveActor(entry) {
-  const actorUid = String(entry.actorUid || "").trim()
-  if (actorUid && employeeMapByUid.value.has(actorUid)) {
-    const employee = employeeMapByUid.value.get(actorUid) || {}
-    return {
-      label: firstNonEmpty(employee.email, employee.username, actorUid),
-      role: String(employee.role || "").toLowerCase()
+function belongsToCompany(row) {
+  const source = String(row?.source || "").trim().toLowerCase()
+  const account = String(row?.account || "").trim().toLowerCase()
+  const details = String(row?.details || "").trim().toLowerCase()
+  const eventType = String(row?.eventType || "").trim().toLowerCase()
+  const blob = `${source} ${account} ${details} ${eventType}`
+
+  if (companyId.value && blob.includes(String(companyId.value).toLowerCase())) return true
+  if (companyName.value && blob.includes(String(companyName.value).toLowerCase())) return true
+  if (employeeEmails.value.has(account)) return true
+  if (employeeNames.value.has(account)) return true
+
+  if (source.includes("job")) {
+    for (const title of jobTitles.value) {
+      if (title && details.includes(title)) return true
     }
   }
 
-  const actorEmail = String(entry.actorEmail || "").trim().toLowerCase()
-  if (actorEmail && employeeMapByEmail.value.has(actorEmail)) {
-    const employee = employeeMapByEmail.value.get(actorEmail) || {}
-    return {
-      label: firstNonEmpty(employee.email, employee.username, actorEmail),
-      role: String(employee.role || "").toLowerCase()
-    }
-  }
+  return false
+}
 
-  if (actorUid && actorUid === companyAdminUid.value) {
-    return { label: firstNonEmpty(entry.actorEmail, actorUid), role: "company_admin" }
+function mapLogRow(row, index) {
+  const sourceClass = normalizeSource(row?.source)
+  const sourceLabelMap = {
+    employees: "Users",
+    jobs: "Jobs",
+    applications: "Applications",
+    admin: "Company Logs",
   }
+  const role = inferRole(row)
+  const details = String(row?.details || "").trim()
 
   return {
-    label: firstNonEmpty(entry.actorEmail, actorUid, companyName.value),
-    role: String(entry.targetRole || "").toLowerCase()
+    id: String(row?.id || `company-log-${index}`),
+    timestampMs: toMillis(row?.createdAt || row?.updatedAt),
+    sourceLabel: sourceLabelMap[sourceClass] || "Company Logs",
+    sourceClass,
+    eventLabel: toEventLabel(row?.eventType),
+    roleLabel: role,
+    accountLabel: String(row?.account || "Unknown"),
+    details: details || "-",
   }
+}
+
+function normalizeSource(value) {
+  const source = String(value || "").trim().toLowerCase()
+  if (source.includes("user")) return "employees"
+  if (source.includes("job")) return "jobs"
+  if (source.includes("application")) return "applications"
+  return "admin"
+}
+
+function inferRole(row) {
+  const blob = `${String(row?.account || "").toLowerCase()} ${String(row?.details || "").toLowerCase()} ${String(row?.eventType || "").toLowerCase()}`
+  if (blob.includes("company_admin") || blob.includes("company admin")) return "company_admin"
+  if (/\bhr\b/.test(blob) || blob.includes("human resource")) return "hr"
+  if (blob.includes("finance")) return "finance"
+  if (blob.includes("operation")) return "operation"
+  if (blob.includes("employer")) return "employer"
+  if (blob.includes("applicant")) return "applicant"
+  return ""
+}
+
+function toEventLabel(value) {
+  const raw = String(value || "").trim()
+  if (!raw) return "Action"
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 function toMillis(value) {
   if (!value) return 0
-  if (typeof value?.toMillis === "function") return value.toMillis()
   if (typeof value === "number") return value
-  const parsed = Date.parse(value)
+  const parsed = Date.parse(String(value))
   return Number.isNaN(parsed) ? 0 : parsed
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    const text = String(value || "").trim()
-    if (text) return text
-  }
-  return ""
 }
 
 function formatDateTime(ms) {
@@ -313,6 +315,10 @@ function formatDateTime(ms) {
     hour: "2-digit",
     minute: "2-digit"
   })
+}
+
+if (bootstrapDone) {
+  // no-op, keeps linter calm for top-level guards in some setups
 }
 </script>
 

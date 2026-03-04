@@ -102,19 +102,50 @@ async function fetchCollection(targetLike) {
 function onSnapshot(targetLike, onNext, onError) {
   const nextCb = typeof onNext === "function" ? onNext : onNext?.next
   const errorCb = typeof onError === "function" ? onError : onNext?.error
+  let disposed = false
 
   const pull = async () => {
+    if (disposed) return
     try {
       const rows = await fetchCollection(targetLike)
+      if (disposed) return
       nextCb?.(createQuerySnapshot(rows))
     } catch (err) {
+      if (disposed) return
       errorCb?.(err)
     }
   }
 
   void pull()
-  const timer = setInterval(pull, 15000)
-  return () => clearInterval(timer)
+  // Faster polling for dashboard/topbar notifications and list freshness.
+  const timer = setInterval(pull, 3000)
+
+  const onFocus = () => {
+    void pull()
+  }
+  const onVisibilityChange = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") {
+      void pull()
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("focus", onFocus)
+  }
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibilityChange)
+  }
+
+  return () => {
+    disposed = true
+    clearInterval(timer)
+    if (typeof window !== "undefined") {
+      window.removeEventListener("focus", onFocus)
+    }
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }
 }
 
 async function getDocs(targetLike) {
